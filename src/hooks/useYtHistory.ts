@@ -4,29 +4,30 @@ import { usePublicClient } from 'wagmi'
 import { getAbiItem, type PublicClient } from 'viem'
 import type { Series } from '@/contracts/types'
 import { uniswapV3PoolAbi } from '@/contracts/abis'
-import { CHART_DAYS } from '@/contracts/constants'
+import { CHART_DAYS, CHART_POINTS } from '@/contracts/constants'
 import { BLOCK_TIME_MS } from '@/lib/env'
-import { MOCK_CHART_CHANGE, MOCK_YT_CHANGE_24H, mockChart } from '@/lib/mock'
+import { MOCK_CHART_CHANGE, MOCK_TVL_CHANGE_7D, MOCK_YT_CHANGE_24H, mockChart } from '@/lib/mock'
 import { poolPrice } from '@/lib/math'
+import { resample, type Resampled, type Sample } from '@/lib/history'
 import { CHAIN_ID } from '@/lib/wagmi'
 import { isMockSeries } from './useSeries'
 
-export type YtHistory = {
-  points: number[] // 31 points, oldest → newest (newest = current slot0 price)
-  days: number // window actually covered (30, 7, 1 — or 0 if no swap logs could be read)
-  changePct: number | null // last / first − 1, percent
-  change24hPct: number | null
-  isMock: boolean
-}
+export type YtHistory = Resampled & { source: 'kv' | 'logs' | 'mock' | 'none'; isMock: boolean }
 
 const swapEvent = getAbiItem({ abi: uniswapV3PoolAbi, name: 'Swap' })
-const POINTS = CHART_DAYS + 1
+const EMPTY: YtHistory = { points: [], days: CHART_DAYS, changePct: null, change24hPct: null, tvlChange7dPct: null, source: 'none', isMock: false }
 
-/**
- * Phase 1: build the 30d YT price line from the YT pool's Swap events (sqrtPriceX96 → price in stock).
- * Falls back to shorter windows when the RPC rejects the log range. Phase 2 replaces this with a KV series.
- */
-async function fetchHistory(client: PublicClient, s: Series): Promise<Omit<YtHistory, 'isMock'>> {
+/** 1. KV series (sampled slot0 every poll, see /api/yt-history). */
+async function fromKv(s: Series): Promise<YtHistory | null> {
+  const r = await fetch(`/api/yt-history/${s.id}`, { cache: 'no-store' })
+  if (!r.ok) return null
+  const { samples } = (await r.json()) as { samples: Sample[] }
+  if (!samples || samples.length < 2) return null
+  return { ...resample(samples, Date.now() / 1000), source: 'kv', isMock: false }
+}
+
+/** 2. Fallback: build the line from the YT pool's Swap events (shrinks the window if the RPC rejects the range). */
+async function fromLogs(client: PublicClient, s: Series): Promise<YtHistory> {
   const latest = await client.getBlockNumber()
   const [token0, slot0] = await Promise.all([
     client.readContract({ address: s.poolYT, abi: uniswapV3PoolAbi, functionName: 'token0' }),
@@ -43,7 +44,7 @@ async function fetchHistory(client: PublicClient, s: Series): Promise<Omit<YtHis
     try {
       const logs = await client.getLogs({ address: s.poolYT, event: swapEvent, fromBlock: from, toBlock: latest })
       const bucket = (latest - from) / BigInt(CHART_DAYS) || 1n
-      const last: (number | null)[] = Array(POINTS).fill(null)
+      const last: (number | null)[] = Array(CHART_POINTS).fill(null)
       for (const log of logs) {
         if (log.blockNumber == null || log.args.sqrtPriceX96 == null) continue
         const i = Math.min(CHART_DAYS, Number((log.blockNumber - from) / bucket))
@@ -53,24 +54,19 @@ async function fetchHistory(client: PublicClient, s: Series): Promise<Omit<YtHis
       const firstKnown = last.find((v) => v != null) ?? current
       const points: number[] = []
       let prev = firstKnown
-      for (let i = 0; i < POINTS; i++) {
-        prev = last[i] ?? prev
-        points.push(prev)
-      }
-      const dayBuckets = CHART_DAYS / days // buckets per calendar day in this window
-      const back = Math.min(POINTS - 1, Math.max(1, Math.round(dayBuckets)))
-      const p24 = points[POINTS - 1 - back]
+      for (let i = 0; i < CHART_POINTS; i++) { prev = last[i] ?? prev; points.push(prev) }
+      const back = Math.min(CHART_POINTS - 1, Math.max(1, Math.round(CHART_DAYS / days)))
+      const p24 = points[CHART_POINTS - 1 - back]
       return {
-        points,
-        days,
-        changePct: points[0] > 0 ? (points[POINTS - 1] / points[0] - 1) * 100 : null,
-        change24hPct: p24 > 0 ? (points[POINTS - 1] / p24 - 1) * 100 : null,
+        points, days, source: 'logs', isMock: false, tvlChange7dPct: null,
+        changePct: points[0] > 0 ? (points[CHART_POINTS - 1] / points[0] - 1) * 100 : null,
+        change24hPct: p24 > 0 ? (points[CHART_POINTS - 1] / p24 - 1) * 100 : null,
       }
     } catch {
       continue
     }
   }
-  return { points: Array(POINTS).fill(current), days: 0, changePct: null, change24hPct: null }
+  return { ...EMPTY, points: Array(CHART_POINTS).fill(current), days: 0 }
 }
 
 export function useYtHistory(series: Series, seriesIndex: number): YtHistory {
@@ -78,11 +74,16 @@ export function useYtHistory(series: Series, seriesIndex: number): YtHistory {
   const client = usePublicClient({ chainId: CHAIN_ID })
   const q = useQuery({
     queryKey: ['ytHistory', series.id],
-    queryFn: () => fetchHistory(client as PublicClient, series),
+    queryFn: async () => {
+      try { const kv = await fromKv(series); if (kv) return kv } catch { /* fall through */ }
+      return fromLogs(client as PublicClient, series)
+    },
     enabled: !mock && !!client,
     refetchInterval: 60_000,
     staleTime: 30_000,
   })
-  if (mock) return { points: mockChart(seriesIndex), days: CHART_DAYS, changePct: MOCK_CHART_CHANGE, change24hPct: MOCK_YT_CHANGE_24H, isMock: true }
-  return q.data ? { ...q.data, isMock: false } : { points: [], days: CHART_DAYS, changePct: null, change24hPct: null, isMock: false }
+  if (mock) {
+    return { points: mockChart(seriesIndex), days: CHART_DAYS, changePct: MOCK_CHART_CHANGE, change24hPct: MOCK_YT_CHANGE_24H, tvlChange7dPct: MOCK_TVL_CHANGE_7D, source: 'mock', isMock: true }
+  }
+  return q.data ?? EMPTY
 }

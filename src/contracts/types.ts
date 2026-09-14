@@ -1,8 +1,14 @@
-import type { Address } from 'viem'
-import { isAddress, zeroAddress } from 'viem'
-import raw from './series.json'
+import type { Address, Hex } from 'viem'
+import { isAddress, isHex, zeroAddress } from 'viem'
+import rawJson from './series.json'
 
 export type Issuer = 'Robinhood' | 'Backed' | 'Dinari'
+
+export type LendParams = {
+  maxLtv: string // shown until Morpho lltv is read
+  borrowApr: string // Morpho IRM rate — phase 2
+  loanDecimals?: number // loan token decimals, default 6 (USDC)
+}
 
 /** Data model from CLAUDE.md, plus a few optional presentation fields. */
 export type Series = {
@@ -23,10 +29,32 @@ export type Series = {
   priceFeed: Address // Chainlink stock/USD feed on chain 4663
   decimals: number // stock token decimals (PT/YT mirror it)
   schedule?: string // issuer's declared distribution schedule, e.g. "Oct 3 · monthly"
-  lend?: { maxLtv: string; borrowApr: string } // Morpho market params (phase 2: read from Morpho)
+  lend?: LendParams // Morpho market presentation params
+  morphoMarketId?: Hex // Morpho Blue market id (bytes32) for the pPT/USDC market
 }
 
-type RawSeries = (typeof raw)[number]
+type RawSeries = {
+  id: string
+  ticker: string
+  name: string
+  issuer: string
+  underlying: string
+  vault: string
+  pt: string
+  yt: string
+  accountant: string
+  poolPT: string
+  poolYT: string
+  priceFeed?: string
+  maturity: number
+  cap: string
+  decimals?: number
+  schedule?: string
+  lend?: LendParams
+  morphoMarketId?: string
+}
+
+const raw = rawJson as unknown as RawSeries[]
 
 function addr(v: string, field: string, id: string): Address {
   if (!isAddress(v)) throw new Error(`series.json: ${id}.${field} is not an address: ${v}`)
@@ -34,6 +62,7 @@ function addr(v: string, field: string, id: string): Address {
 }
 
 function parse(r: RawSeries): Series {
+  const marketId = r.morphoMarketId && isHex(r.morphoMarketId) && r.morphoMarketId.length === 66 ? (r.morphoMarketId as Hex) : undefined
   return {
     id: r.id,
     ticker: r.ticker,
@@ -52,10 +81,13 @@ function parse(r: RawSeries): Series {
     decimals: r.decimals ?? 18,
     schedule: r.schedule,
     lend: r.lend,
+    morphoMarketId: marketId,
   }
 }
 
 export const SERIES: readonly Series[] = raw.map(parse)
+
+export const seriesById = (id: string): Series | undefined => SERIES.find((s) => s.id === id)
 
 /** True while any core address is still the zero placeholder. */
 export function hasPlaceholderAddresses(s: Series): boolean {

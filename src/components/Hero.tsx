@@ -8,7 +8,7 @@ import { StatsStrip } from './StatsStrip'
 
 export function Hero() {
   const series = useSeries()
-  const stats = useAllSeriesStats()
+  const { stats } = useAllSeriesStats()
   // "hTopApy" / "hTopLev": the series with the highest fixed APY (JEPI in the prototype).
   const top = useMemo(() => {
     let best = 0

@@ -54,7 +54,7 @@ export const toNumber = (v: bigint, decimals: number): number => Number(formatUn
  * a clean small-integer ratio at least 20% from 1 is a split; anything else waits for a guardian.
  */
 export function classifyRatio(r: number): 'Dividend' | 'Split' | 'Special dividend' | 'Unclassified' {
-  if (r > 1 && r - 1 <= 0.03) return 'Dividend'
+  if (r > 1 && r - 1 <= 0.03 + 1e-12) return 'Dividend'
   if (Math.abs(r - 1) >= 0.2 && isCleanRatio(r)) return 'Split'
   if (r > 1) return 'Special dividend'
   return 'Unclassified'

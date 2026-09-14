@@ -5,10 +5,11 @@ import { useAllSeriesStats } from '@/hooks/useSeriesStats'
 import { usd } from '@/lib/format'
 import { toNumber } from '@/lib/math'
 import { MOCK_DIVIDENDS_DISTRIBUTED } from '@/lib/mock'
+import { Skel } from './Skeleton'
 
 export function StatsStrip() {
   const series = useSeries()
-  const stats = useAllSeriesStats()
+  const { stats, isLoading } = useAllSeriesStats()
   const { tvl, distributed } = useMemo(() => {
     const tvl = stats.reduce((a, s) => a + s.tvlUsd, 0)
     // Live: dividends accrued to YT holders so far = Σ deposits × (index/d0 − 1) × USD price.
@@ -20,9 +21,9 @@ export function StatsStrip() {
   }, [stats])
   return (
     <div className="stats"><div className="wrap">
-      <div><b id="sTvl">{usd(tvl)}</b>total value split</div>
+      <div><b id="sTvl">{isLoading ? <Skel w={90} /> : usd(tvl)}</b>total value split</div>
       <div><b>{series.length}</b>series live · {issuerCount(series)} issuers</div>
-      <div><b>{usd(distributed)}</b>dividends distributed</div>
+      <div><b>{isLoading ? <Skel w={80} /> : usd(distributed)}</b>dividends distributed</div>
       <div><b>0%</b>fee to merge</div>
     </div></div>
   )

@@ -9,14 +9,16 @@ import { YtChart } from './YtChart'
 import { DividendLedger } from './DividendLedger'
 import { ActionPanel, type Mode } from './ActionPanel'
 import { Position } from './Position'
+import { Portfolio } from './Portfolio'
+import { Banner, RPC_ERROR_TEXT } from './Skeleton'
 import { useSeriesAt } from '@/hooks/useSeries'
-import { useSeriesStats } from '@/hooks/useSeriesStats'
+import { useAllSeriesStats } from '@/hooks/useSeriesStats'
 import { useLedger } from '@/hooks/useLedger'
 import { usePosition } from '@/hooks/usePosition'
 import { useYtHistory } from '@/hooks/useYtHistory'
 import { MOCK } from '@/lib/env'
 import { fmtInt, monthYear } from '@/lib/format'
-import { MOCK_START_BLOCK } from '@/lib/mock'
+import { MOCK_START_BLOCK, mockStats } from '@/lib/mock'
 import { CHAIN_ID } from '@/lib/wagmi'
 
 /** "block 4,812,337" — live block number, or the prototype's ticking counter in MOCK mode. */
@@ -46,7 +48,8 @@ export function AppPage() {
     else if (side === 'yt' || tab == null) setMode('split')
   }, [tab, side])
 
-  const stats = useSeriesStats(series)
+  const all = useAllSeriesStats()
+  const stats = all.stats[index] ?? mockStats(series)
   const ledger = useLedger(series)
   const position = usePosition(series)
   const history = useYtHistory(series, index)
@@ -60,12 +63,14 @@ export function AppPage() {
 
   return (
     <AppShell active={active}>
-      <div className="wrap applay">
+      {tab === 'portfolio' && <div className="wrap" style={{ paddingTop: 28 }}><Portfolio /></div>}
+      <div className="wrap applay" style={tab === 'portfolio' ? { paddingTop: 16 } : undefined}>
         <div>
           <div className="panel">
             <h4><span id="aTtl" style={{ fontSize: 14, color: 'var(--fg)', fontFamily: 'var(--font-inter), Inter, system-ui, sans-serif' }}>{series.ticker} · {monthYear(series.maturity)}</span><BlockLabel /></h4>
             <SeriesSelector current={index} onPick={pick} />
-            <KPIs stats={stats} ytChange24h={history.change24hPct} />
+            {all.isError && <Banner kind="r">{RPC_ERROR_TEXT}</Banner>}
+            <KPIs stats={stats} ytChange24h={history.change24hPct} tvlChange7d={history.tvlChange7dPct} />
             <YtChart ticker={series.ticker} points={history.points} days={history.days} changePct={history.changePct} />
           </div>
           <DividendLedger ledger={ledger} />
