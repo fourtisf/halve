@@ -1,4 +1,5 @@
 /** External links. Empty env values fall back to '#' so nothing 404s before the docs exist. */
+export const X_HANDLE = '@Halvefinance'
 const env = (v: string | undefined) => (v && v.length > 0 ? v : '#')
 
 export const LINKS = {
@@ -6,7 +7,7 @@ export const LINKS = {
   contracts: env(process.env.NEXT_PUBLIC_CONTRACTS_URL || 'https://robinhoodchain.blockscout.com'),
   audit: env(process.env.NEXT_PUBLIC_AUDIT_URL),
   api: env(process.env.NEXT_PUBLIC_API_URL),
-  x: env(process.env.NEXT_PUBLIC_X_URL),
+  x: env(process.env.NEXT_PUBLIC_X_URL || 'https://x.com/Halvefinance'),
   telegram: env(process.env.NEXT_PUBLIC_TELEGRAM_URL),
   discord: env(process.env.NEXT_PUBLIC_DISCORD_URL),
 } as const

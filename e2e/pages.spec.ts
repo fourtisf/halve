@@ -20,6 +20,8 @@ test('token page renders content from token.json', async ({ page }) => {
   await page.goto('/token')
   await expect(page.locator('body')).toContainText('$43,960')
   await expect(page.locator('body')).toContainText('12,418,300')
+  await expect(page.locator('#ca')).toContainText('coming soon')
+  await expect(page.locator('footer a', { hasText: 'X' })).toHaveAttribute('href', 'https://x.com/Halvefinance')
 })
 
 test('404, robots, sitemap, icon, api', async ({ page, request }) => {

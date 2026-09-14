@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 import { Providers } from '@/lib/providers'
 import { SITE_URL } from '@/lib/env'
+import { X_HANDLE } from '@/lib/links'
 import { Nav } from '@/components/Nav'
 import { Footer } from '@/components/Footer'
 import { WalletModal } from '@/components/WalletModal'
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
   description: DESCRIPTION,
   applicationName: 'Halve',
   openGraph: { title: TITLE, description: DESCRIPTION, siteName: 'Halve', type: 'website', url: '/' },
-  twitter: { card: 'summary_large_image', title: TITLE, description: DESCRIPTION },
+  twitter: { card: 'summary_large_image', site: X_HANDLE, creator: X_HANDLE, title: TITLE, description: DESCRIPTION },
   robots: { index: true, follow: true },
 }
 

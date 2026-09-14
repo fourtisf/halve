@@ -42,7 +42,7 @@ without a browser extension. The e2e suite uses it.
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_*`) | empty | Vercel KV / Upstash Redis for the YT price and TVL series. |
 | `CRON_SECRET` | empty | Protects `/api/cron/sample`. |
 | `NEXT_PUBLIC_MORPHO_BLUE` | empty | Morpho Blue address on 4663; enables live lend-market reads. |
-| `NEXT_PUBLIC_DOCS_URL`, `…_CONTRACTS_URL`, `…_AUDIT_URL`, `…_API_URL`, `…_X_URL`, `…_TELEGRAM_URL`, `…_DISCORD_URL` | `#` | Footer / nav links. |
+| `NEXT_PUBLIC_DOCS_URL`, `…_CONTRACTS_URL`, `…_AUDIT_URL`, `…_API_URL`, `…_X_URL`, `…_TELEGRAM_URL`, `…_DISCORD_URL` | `#` (X defaults to `https://x.com/Halvefinance`) | Footer / nav links. |
 | `NEXT_PUBLIC_ERROR_ENDPOINT` | empty | Receives JSON error reports from the error boundaries. |
 
 Deploy target is Vercel at **halve.finance**: import the repo, set the same variables in the project settings, add the domain, and point Hostinger DNS at Vercel (`A @ 76.76.21.21`, `CNAME www cname.vercel-dns.com`). `vercel.json` schedules
@@ -127,5 +127,5 @@ clear space of one bar height, 16 px minimum, never rotated or gradiented, and t
 
 - Earn router (quote only; the button toasts "quote only" outside mock mode).
 - Morpho borrow APR (needs the IRM); LP balances in "Your position" (needs the router).
-- `/token` figures come from `src/content/token.json` until an indexer exists.
+- `/token` figures come from `src/content/token.json` until an indexer exists; set `contractAddress` there once $HALVE is deployed (empty = "coming soon").
 - KV history needs a few days of samples before the 7 d TVL change is meaningful.
