@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Halve avatar">
+  <title>Halve avatar</title>
+  <circle cx="32" cy="32" r="32" fill="#000000"/>
+  <g transform="translate(11 11) scale(0.656)"><rect x="8" y="44" width="48" height="10" rx="3" fill="#FAFAFA"/><rect x="8" y="30" width="48" height="10" rx="3" fill="#FAFAFA"/><rect x="14" y="10" width="48" height="10" rx="3" fill="#E8C170"/></g>
+</svg>

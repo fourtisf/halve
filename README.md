@@ -115,6 +115,14 @@ assumes, and the unit tests encode, the following — confirm each against the r
   KV is not configured.
 - `useMorphoMarkets` — `market(id)` / `idToMarketParams(id)` on Morpho Blue when configured.
 
+## Brand assets
+
+The logo ("Stack": two paper bars for the share, one gold bar lifted off the top for the dividend)
+lives in `public/brand/` as SVG and PNG, served at `/brand/<file>`. `src/components/Logo.tsx`
+renders the same mark inline; `src/app/icon.svg` and `src/app/apple-icon.png` are the favicons and
+`src/app/opengraph-image.tsx` the social card. Usage rules are in `public/brand/README.txt`:
+clear space of one bar height, 16 px minimum, never rotated or gradiented, and the gap never closes.
+
 ## Still phase 2
 
 - Earn router (quote only; the button toasts "quote only" outside mock mode).
