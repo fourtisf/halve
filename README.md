@@ -38,14 +38,14 @@ without a browser extension. The e2e suite uses it.
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | empty | WalletConnect Cloud project id. The WalletConnect option is hidden until set; MetaMask and Rabby work without it. |
 | `NEXT_PUBLIC_RPC_URL` | viem default (`https://rpc.mainnet.chain.robinhood.com`) | Override the Robinhood Chain RPC. |
 | `NEXT_PUBLIC_BLOCK_TIME_MS` | `100` | Average block time; sizes the swap-log window of the chart fallback. |
-| `NEXT_PUBLIC_SITE_URL` | Vercel production URL or localhost | Canonical URL for metadata, OG image, robots and sitemap. |
+| `NEXT_PUBLIC_SITE_URL` | `https://halve.finance` | Canonical URL for metadata, OG image, robots and sitemap (Vercel previews use their own URL). |
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_*`) | empty | Vercel KV / Upstash Redis for the YT price and TVL series. |
 | `CRON_SECRET` | empty | Protects `/api/cron/sample`. |
 | `NEXT_PUBLIC_MORPHO_BLUE` | empty | Morpho Blue address on 4663; enables live lend-market reads. |
 | `NEXT_PUBLIC_DOCS_URL`, `…_CONTRACTS_URL`, `…_AUDIT_URL`, `…_API_URL`, `…_X_URL`, `…_TELEGRAM_URL`, `…_DISCORD_URL` | `#` | Footer / nav links. |
 | `NEXT_PUBLIC_ERROR_ENDPOINT` | empty | Receives JSON error reports from the error boundaries. |
 
-Deploy target is Vercel: set the same variables in the project settings. `vercel.json` schedules
+Deploy target is Vercel at **halve.finance**: import the repo, set the same variables in the project settings, add the domain, and point Hostinger DNS at Vercel (`A @ 76.76.21.21`, `CNAME www cname.vercel-dns.com`). `vercel.json` schedules
 `/api/cron/sample` every 15 minutes (Pro plan; Hobby allows daily crons, but the history API also
 samples read-through, so the series fills from traffic alone).
 

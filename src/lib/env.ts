@@ -14,10 +14,11 @@ export const HAS_WALLETCONNECT = WALLETCONNECT_PROJECT_ID.length > 0
 /** Average block time on Robinhood Chain, used to size the swap-log window for the YT chart fallback. */
 export const BLOCK_TIME_MS = Number(process.env.NEXT_PUBLIC_BLOCK_TIME_MS ?? '100') || 100
 
-/** Canonical site URL for metadata / OG images. */
+/** Canonical site URL for metadata / OG images. Production is halve.finance; Vercel previews use their own URL. */
+export const CANONICAL_URL = 'https://halve.finance'
 export const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ||
-  (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : 'http://localhost:3000')
+  (process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : CANONICAL_URL)
 
 /** Morpho Blue singleton on chain 4663. Lend markets read live from it when set. */
 export const MORPHO_BLUE = (process.env.NEXT_PUBLIC_MORPHO_BLUE || '') as `0x${string}` | ''
