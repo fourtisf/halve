@@ -11,7 +11,7 @@ test('lend shows three Morpho markets and toasts', async ({ page }) => {
 test('oracle table lists every series with status and index', async ({ page }) => {
   await page.goto('/oracle')
   const rows = page.locator('#orc tr')
-  await expect(rows).toHaveCount(6)
+  await expect(rows).toHaveCount(12)
   await expect(rows.nth(0)).toContainText('1.023222')
   await expect(rows.nth(2)).toContainText('Held · timelock')
 })

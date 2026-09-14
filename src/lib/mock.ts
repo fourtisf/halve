@@ -24,6 +24,14 @@ export const MOCK_SERIES: MockSeries[] = [
   { t: 'SCHD', name: 'Schwab US Dividend', iss: 'Robinhood', px: 28.9, dy: 0.036, yrs: 0.53, cap: 38, tvl: 1.6e6, ev: 2 },
   { t: 'SPY', name: 'S&P 500 ETF', iss: 'Robinhood', px: 612.1, dy: 0.012, yrs: 0.53, cap: 18, tvl: 0.7e6, ev: 1 },
   { t: 'AAPL', name: 'Apple', iss: 'Robinhood', px: 228.4, dy: 0.005, yrs: 0.53, cap: 9, tvl: 0.3e6, ev: 2 },
+  // Large caps added after launch. Yields follow the real payout policies: NVDA pays ~0.02 %,
+  // MSFT / GOOGL / META small quarterly dividends, AMZN and TSLA none (0 % → PT at par, YT ≈ 0).
+  { t: 'NVDA', name: 'NVIDIA', iss: 'Backed', px: 185.2, dy: 0.0002, yrs: 0.53, cap: 33, tvl: 2.1e6, ev: 2 },
+  { t: 'MSFT', name: 'Microsoft', iss: 'Robinhood', px: 512.3, dy: 0.007, yrs: 0.53, cap: 27, tvl: 1.9e6, ev: 2 },
+  { t: 'AMZN', name: 'Amazon', iss: 'Dinari', px: 231.4, dy: 0, yrs: 0.53, cap: 8, tvl: 0.5e6, ev: 0 },
+  { t: 'GOOGL', name: 'Alphabet', iss: 'Robinhood', px: 245.6, dy: 0.0035, yrs: 0.53, cap: 15, tvl: 0.9e6, ev: 2 },
+  { t: 'META', name: 'Meta Platforms', iss: 'Dinari', px: 742.1, dy: 0.0028, yrs: 0.53, cap: 12, tvl: 0.8e6, ev: 2 },
+  { t: 'TSLA', name: 'Tesla', iss: 'Backed', px: 412.8, dy: 0, yrs: 0.53, cap: 11, tvl: 0.6e6, ev: 0 },
 ]
 
 export const MOCK_BALANCE = 12.4
@@ -55,7 +63,7 @@ export function mockStats(series: Series): SeriesStats {
     ptPrice,
     ytPrice,
     fixedApy,
-    leverage: 1 / ytPrice,
+    leverage: ytPrice > 0 ? 1 / ytPrice : 0,
     divYield: m.dy,
     yearsToMaturity: m.yrs,
     totalDeposits,
