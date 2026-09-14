@@ -15,7 +15,7 @@ h1,h2,h3{letter-spacing:-.03em;font-weight:500}
 nav{position:sticky;top:0;z-index:30;background:rgba(0,0,0,.75);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
 nav .wrap{display:flex;align-items:center;justify-content:space-between;height:60px}
 .logo{display:flex;align-items:center;gap:9px;font-weight:600;font-size:15px;letter-spacing:-.02em}
-.logo i{width:18px;height:18px;border-radius:50%;background:conic-gradient(from 180deg,#fff 0 50%,var(--yt) 50% 100%);box-shadow:0 0 0 1px rgba(255,255,255,.15)}
+.logo svg{width:20px;height:20px;flex-shrink:0}
 .links{display:flex;gap:2px}
 .links a{font-size:13.5px;color:var(--fg2);padding:6px 12px;border-radius:8px;transition:.15s}
 .links a:hover,.links a.on{color:var(--fg);background:var(--bg2)}

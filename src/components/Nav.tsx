@@ -9,6 +9,7 @@ import { useWalletModal } from '@/lib/walletModal'
 import { shortAddr } from '@/lib/format'
 import { CHAIN_ID } from '@/lib/wagmi'
 import { LINKS, externalProps } from '@/lib/links'
+import { HalveLogo } from './Logo'
 
 const NAV = [
   { href: '/', label: 'Home' },
@@ -44,7 +45,7 @@ export function Nav() {
   return (
     <nav>
       <div className="wrap">
-        <Link className="logo" href="/"><i />Halve</Link>
+        <Link className="logo" href="/"><HalveLogo /></Link>
         <div className="links" id="navlinks">{links()}</div>
         <div style={{ display: 'flex', gap: 8 }}>
           <WalletNavButton />
