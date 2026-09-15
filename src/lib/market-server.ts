@@ -14,6 +14,7 @@ export const MARKET_FIXTURE = MODE === 'fixture'
 
 const TTL_MS = 60_000
 const RETRY_MS = 15_000
+const PARTIAL_RETRY_MS = 30_000
 const TIMEOUT_MS = 8_000
 const ETH = 'ETH-USD'
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) HalveMarket/0.1 (+https://halve.finance)'
@@ -87,8 +88,17 @@ export async function getMarket(): Promise<MarketData> {
   if (!inflight) {
     inflight = fetchMarket(now)
       .then((d) => {
-        if (d.ok) cache = { at: now, data: d }
-        else cache = { at: now - TTL_MS + RETRY_MS, data: cache ? { ...cache.data, stale: true, errors: d.errors } : d }
+        const prev = cache?.data
+        if (d.ok) {
+          // a ticker that failed this round keeps its last good quote rather than dropping back to demo numbers
+          const quotes = { ...d.quotes }
+          let carried = 0
+          for (const [k, v] of Object.entries(prev?.quotes ?? {})) if (!quotes[k]) { quotes[k] = v; carried++ }
+          const partial = d.errors.length > 0
+          cache = { at: partial ? now - TTL_MS + PARTIAL_RETRY_MS : now, data: { ...d, quotes, ethUsd: d.ethUsd ?? prev?.ethUsd ?? null, stale: carried > 0 || partial } }
+        } else {
+          cache = { at: now - TTL_MS + RETRY_MS, data: prev ? { ...prev, stale: true, errors: d.errors } : d }
+        }
         return cache.data
       })
       .catch((e: unknown) => {

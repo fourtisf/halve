@@ -30,7 +30,7 @@ export type MarketData = {
   ok: boolean
   source: MarketSource
   updatedAt: number | null
-  /** True when the last refresh failed and these are the previous numbers. */
+  /** True when some quotes are missing or carried over from an earlier refresh (see `errors`). */
   stale: boolean
   quotes: Record<string, Quote>
   ethUsd: number | null

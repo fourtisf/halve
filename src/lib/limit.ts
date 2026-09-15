@@ -99,7 +99,6 @@ export function orderRange(side: OrderSide, price: number, currentTick: number, 
   const current = stockPerTokenAt(currentTick, p)
   const bad = (reason: string): OrderRange => ({ ok: false, reason, tickLower: 0, tickUpper: 0, depositIsToken0: false, priceLow: 0, priceHigh: 0, current })
   if (!(price > 0) || !Number.isFinite(price)) return bad('Enter a price')
-  const step = Math.pow(1.0001, p.spacing) - 1
   const wrongSide = side === 'buy'
     ? `A limit buy must sit below the current price (${current.toFixed(4)}). To buy now, use Market.`
     : `A limit sell must sit above the current price (${current.toFixed(4)}). To sell now, use Market.`
@@ -118,9 +117,10 @@ export function orderRange(side: OrderSide, price: number, currentTick: number, 
   const edges = [stockPerTokenAt(tickLower, p), stockPerTokenAt(tickUpper, p)]
   const priceLow = Math.min(...edges)
   const priceHigh = Math.max(...edges)
-  // the range must not contain the current tick, or the mint would need both tokens
+  // a price on the right side of the current tick's own price rounds to a range that never contains the tick
+  // (floor below it for a buy, ceil above it for a sell); this guard only documents the invariant
   const clear = depositIsToken0 ? currentTick < tickLower : currentTick >= tickUpper
-  if (!clear) return { ...bad(`Too close to the current price: move the limit at least ${(step * 100).toFixed(1)}% ${side === 'buy' ? 'under' : 'over'} ${current.toFixed(4)}.`), priceLow, priceHigh }
+  if (!clear) return { ...bad(wrongSide), priceLow, priceHigh }
   return { ok: true, reason: '', tickLower, tickUpper, depositIsToken0, priceLow, priceHigh, current }
 }
 

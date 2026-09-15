@@ -62,7 +62,7 @@ export function ActionPanel({ series, stats, position, mode, onMode, initialSide
   const mergeH = useMerge(series)
   const redeemH = useRedeem(series, stats.accrued)
   const buyH = useBuy(series, stats, side, payWith, amt, dir)
-  const limitH = useLimitOrders(series, stats, { side, direction: dir, payWith, amount: amt, price: limitPrice })
+  const limitH = useLimitOrders(series, stats, { side, direction: dir, payWith, amount: amt, price: limitPrice, active: mode === 'buy', limit: mode === 'buy' && orderType === 'limit' })
 
   const matured = isMatured(series, stats)
   const settled = isSettled(stats) || (matured && stats.isMock)

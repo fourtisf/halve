@@ -45,7 +45,17 @@ export type Order = {
 
 type PoolInfo = PoolSide & { address: Address; token0: Address; fee: number; tick: number; sqrtPriceX96: bigint; current: number }
 
-type Inputs = { side: BuySide; direction: OrderSide; payWith: PayWith; amount: string; price: string }
+type Inputs = {
+  side: BuySide
+  direction: OrderSide
+  payWith: PayWith
+  amount: string
+  price: string
+  /** The Trade tab is showing: pool and position reads only run then. */
+  active: boolean
+  /** Limit chosen (the ETH → stock pre-swap quote only runs then). */
+  limit: boolean
+}
 
 const RECORDS_KEY = 'halve:orders:v1'
 type Record_ = { side: OrderSide; token: BuySide; price: number; amount: number }
@@ -58,6 +68,29 @@ function saveRecord(tokenId: bigint, r: Record_) {
 
 const MOCK_POOL: PoolSide = { tokenIsToken0: true, tokenDecimals: 18, stockDecimals: 18, spacing: 60 }
 const DEADLINE = () => BigInt(Math.floor(Date.now() / 1000) + 20 * 60)
+
+/**
+ * Which token each position deposited at mint (its first IncreaseLiquidity). Tries the full range from the
+ * series deploy block, then ever shorter windows when the RPC rejects the span; a mint older than the
+ * window that finally works stays unknown, which the UI shows as a plain position with a Close button.
+ */
+async function depositSides(client: PublicClient, ids: bigint[], fromBlock: bigint | 'earliest'): Promise<Record<string, boolean>> {
+  const latest = await client.getBlockNumber()
+  const spans: (bigint | null)[] = [null, 2_000_000n, 200_000n, 20_000n, 2_000n]
+  for (const span of spans) {
+    const from = span == null ? fromBlock : latest > span ? latest - span : 0n
+    try {
+      const logs = await client.getLogs({ address: UNISWAP.npm, event: INCREASE_LIQUIDITY, args: { tokenId: ids }, fromBlock: from, toBlock: latest })
+      const sides: Record<string, boolean> = {}
+      for (const l of logs) {
+        const id = l.args.tokenId?.toString()
+        if (id !== undefined && !(id in sides)) sides[id] = (l.args.amount0 ?? 0n) > 0n
+      }
+      return sides
+    } catch { /* range too wide for this RPC: shrink */ }
+  }
+  return {}
+}
 
 /**
  * Limit orders as Uniswap v3 range orders on the PT / YT pools (see lib/limit.ts), placed and closed through
@@ -89,7 +122,7 @@ export function useLimitOrders(series: Series, stats: SeriesStats, input: Inputs
     ]),
     [series.poolPT, series.poolYT],
   )
-  const poolsQ = useReadContracts({ contracts: poolContracts, allowFailure: true, query: { enabled: !mock, refetchInterval: POLL_MS } })
+  const poolsQ = useReadContracts({ contracts: poolContracts, allowFailure: true, query: { enabled: !mock && input.active, refetchInterval: POLL_MS } })
   const pools = useMemo<{ pt: PoolInfo | null; yt: PoolInfo | null }>(() => {
     const d = poolsQ.data as readonly ReadResult[] | undefined
     const build = (i: number, token: Address, address: Address): PoolInfo | null => {
@@ -121,7 +154,7 @@ export function useLimitOrders(series: Series, stats: SeriesStats, input: Inputs
   const ethQ = useQuery({
     queryKey: ['limitEthSwap', series.id, ethSwapIn.toString()],
     queryFn: () => quoteBest(client as PublicClient, FEE_TIERS.map((f) => ({ tokens: [UNISWAP.weth, series.underlying], fees: [f], label: `ETH → ${series.ticker} (${f / 10_000}%)` })), ethSwapIn),
-    enabled: !mock && !!client && ethSwapIn > 0n,
+    enabled: !mock && !!client && ethSwapIn > 0n && input.active && input.limit,
     staleTime: POLL_MS,
     refetchInterval: POLL_MS,
   })
@@ -135,20 +168,20 @@ export function useLimitOrders(series: Series, stats: SeriesStats, input: Inputs
   const balQ = useReadContracts({
     contracts: [{ address: UNISWAP.npm, abi: nonfungiblePositionManagerAbi, functionName: 'balanceOf', args: [owner] }],
     allowFailure: true,
-    query: { enabled: !mock && !!address, refetchInterval: POLL_MS },
+    query: { enabled: !mock && !!address && input.active, refetchInterval: POLL_MS },
   })
   const count = Number(ok<bigint>(balQ.data as readonly ReadResult[] | undefined, 0) ?? 0n)
   const idContracts = useMemo<ContractFunctionParameters[]>(
     () => Array.from({ length: count }, (_, i) => ({ address: UNISWAP.npm, abi: nonfungiblePositionManagerAbi, functionName: 'tokenOfOwnerByIndex', args: [owner, BigInt(i)] })),
     [count, owner],
   )
-  const idsQ = useReadContracts({ contracts: idContracts, allowFailure: true, query: { enabled: !mock && count > 0, refetchInterval: POLL_MS } })
+  const idsQ = useReadContracts({ contracts: idContracts, allowFailure: true, query: { enabled: !mock && count > 0 && input.active, refetchInterval: POLL_MS } })
   const ids = useMemo(() => Array.from({ length: count }, (_, i) => ok<bigint>(idsQ.data as readonly ReadResult[] | undefined, i)).filter((x): x is bigint => x !== undefined), [idsQ.data, count])
   const posContracts = useMemo<ContractFunctionParameters[]>(
     () => ids.map((id) => ({ address: UNISWAP.npm, abi: nonfungiblePositionManagerAbi, functionName: 'positions', args: [id] })),
     [ids],
   )
-  const posQ = useReadContracts({ contracts: posContracts, allowFailure: true, query: { enabled: !mock && ids.length > 0, refetchInterval: POLL_MS } })
+  const posQ = useReadContracts({ contracts: posContracts, allowFailure: true, query: { enabled: !mock && ids.length > 0 && input.active, refetchInterval: POLL_MS } })
 
   type Pos = readonly [bigint, Address, Address, Address, number, number, number, bigint, bigint, bigint, bigint, bigint]
   const candidates = useMemo(() => {
@@ -175,14 +208,10 @@ export function useLimitOrders(series: Series, stats: SeriesStats, input: Inputs
   const unknownIds = useMemo(() => candidates.filter((c) => !records[c.tokenId.toString()]).map((c) => c.tokenId), [candidates, records])
   const sidesQ = useQuery({
     queryKey: ['orderSides', series.id, unknownIds.map(String).join(',')],
-    queryFn: async () => {
-      const logs = await (client as PublicClient).getLogs({ address: UNISWAP.npm, event: INCREASE_LIQUIDITY, args: { tokenId: unknownIds }, fromBlock: series.deployBlock ? BigInt(series.deployBlock) : 'earliest', toBlock: 'latest' })
-      const sides: Record<string, boolean> = {} // tokenId → deposited token0?
-      for (const l of logs) if (l.args.tokenId !== undefined && !(l.args.tokenId.toString() in sides)) sides[l.args.tokenId.toString()] = (l.args.amount0 ?? 0n) > 0n
-      return sides
-    },
-    enabled: !mock && !!client && unknownIds.length > 0,
+    queryFn: () => depositSides(client as PublicClient, unknownIds, series.deployBlock ? BigInt(series.deployBlock) : 'earliest'),
+    enabled: !mock && !!client && unknownIds.length > 0 && input.active,
     staleTime: Infinity,
+    retry: 1,
   })
 
   const liveOrders = useMemo<Order[]>(() => candidates.map(({ tokenId, pos, token, pool: p }) => {
@@ -191,8 +220,8 @@ export function useLimitOrders(series: Series, stats: SeriesStats, input: Inputs
     const dep0 = rec ? (rec.side === 'buy') === !p.tokenIsToken0 : sidesQ.data?.[tokenId.toString()]
     const side: OrderSide | null = rec ? rec.side : dep0 === undefined ? null : (dep0 === !p.tokenIsToken0 ? 'buy' : 'sell')
     const held = amountsForLiquidity(p.sqrtPriceX96, getSqrtRatioAtTick(lower), getSqrtRatioAtTick(upper), liquidity)
-    const amount0 = toNumber(held.amount0 + owed0, p.tokenDecimals)
-    const amount1 = toNumber(held.amount1 + owed1, p.tokenDecimals)
+    const amount0 = toNumber(held.amount0 + owed0, p.tokenIsToken0 ? p.tokenDecimals : p.stockDecimals)
+    const amount1 = toNumber(held.amount1 + owed1, p.tokenIsToken0 ? p.stockDecimals : p.tokenDecimals)
     const edges = [stockPerTokenAt(lower, p), stockPerTokenAt(upper, p)]
     const status = dep0 === undefined ? (liquidity === 0n ? 'filled' : 'open') : orderStatus(lower, upper, dep0, p.tick)
     return {
