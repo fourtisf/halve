@@ -25,6 +25,11 @@ pm2 restart halve --update-env
 curl -fsS https://halve.finance/api/health | jq .
 ```
 
+pnpm settings live in `pnpm-workspace.yaml` and the pnpm version in `package.json` (`packageManager`);
+a newer global pnpm hands over to that version by itself. If an install ever stops with
+`ERR_PNPM_IGNORED_BUILDS`, pnpm 11 has written placeholder lines into `pnpm-workspace.yaml`:
+run `git checkout -- pnpm-workspace.yaml` (or delete the file if it is untracked) and install again.
+
 `pnpm build` runs before the restart, so a failed build leaves the old process serving. Roll back with
 `git checkout <previous sha> && pnpm build && pm2 restart halve`.
 

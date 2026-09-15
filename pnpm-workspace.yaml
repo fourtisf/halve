@@ -1,0 +1,14 @@
+# pnpm settings. pnpm 11 stopped reading pnpm settings from .npmrc and replaced
+# onlyBuiltDependencies / ignoredBuiltDependencies with allowBuilds, so everything lives here;
+# pnpm 10 reads this file too. package.json pins the pnpm version that produced the lockfile.
+
+# The lockfile is pinned and installs run with --frozen-lockfile, so never reject an entry
+# because it was published recently.
+minimumReleaseAge: 0
+
+# Optional native add-ons. The site builds and runs without them, so their install scripts never run.
+allowBuilds:
+  bufferutil: false
+  keccak: false
+  unrs-resolver: false
+  utf-8-validate: false
