@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findCandidates, pickCandidate, setEnvValue, symbolMatches } from './find-stock.mjs'
+import { describeShape, findCandidates, listRegistry, pickCandidate, setEnvValue, symbolMatches } from './find-stock.mjs'
 
 const A = '0x322F0929c4625eD5bAd873c95208D54E1c003b2d'
 const B = '0x1111111111111111111111111111111111111111'
@@ -30,6 +30,16 @@ describe('find-stock', () => {
     const amb = pickCandidate(findCandidates([{ symbol: 'JEPI', address: A }, { symbol: 'JEPI', address: B }], 'JEPI'))
     expect(amb.ambiguous).toHaveLength(2)
     expect(pickCandidate(findCandidates({ symbol: 'SPY', address: A }, 'JEPI'))).toBeNull()
+  })
+  it('lists every token on chain 4663 and describes unknown shapes', () => {
+    const pages = [{ results: [
+      { symbol: 'SPY', deployments: [{ chainId: 4663, contractAddress: A }] },
+      { symbol: 'AAPL', deployments: [{ chainId: 1, contractAddress: B }] },
+      { symbol: 'NVDA', deployments: [{ chainId: 4663, contractAddress: B }] },
+    ] }]
+    expect(listRegistry(pages).map((c) => c.symbol)).toEqual(['NVDA', 'SPY'])
+    expect(describeShape({ results: [{ symbol: 'X', deployments: [] }], next: null })).toBe('object keys: results, next; results[0] keys: symbol, deployments')
+    expect(describeShape([{ a: 1 }])).toBe('array of 1; first item keys: a')
   })
   it('writes STOCK into an env file, replacing or appending', () => {
     expect(setEnvValue('A=1\nSTOCK=0xold\nB=2\n', 'STOCK', A)).toBe(`A=1\nSTOCK=${A}\nB=2\n`)

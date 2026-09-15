@@ -8,12 +8,25 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { formatEther } from 'viem'
-import { resolveStock, setEnvValue } from './lib/find-stock.mjs'
+import { CHAIN_ID, describeShape, fetchRegistry, listRegistry, resolveStock, setEnvValue } from './lib/find-stock.mjs'
 
-const ticker = process.argv[2]
-if (!ticker || ticker.startsWith('--')) { console.error('usage: node scripts/find-stock.mjs <TICKER> [--write]'); process.exit(2) }
-const write = process.argv.includes('--write')
+const args = process.argv.slice(2)
 const rpc = process.env.RPC_URL ?? 'https://rpc.mainnet.chain.robinhood.com'
+
+// --list: every token the registry has on chain 4663; --dump: the raw first page, for diagnosing the shape
+if (args.includes('--list') || args.includes('--dump')) {
+  const pages = await fetchRegistry()
+  if (args.includes('--dump')) { console.log(JSON.stringify(pages[0], null, 1).slice(0, 6000)); process.exit(0) }
+  const listed = listRegistry(pages)
+  if (listed.length === 0) { console.log(`no recognisable token entries (${describeShape(pages[0])}); try --dump`); process.exit(1) }
+  console.log(`${listed.length} tokens in Robinhood's registry on chain ${CHAIN_ID}:`)
+  for (const c of listed) console.log(`  ${c.symbol.padEnd(8)} ${c.address}`)
+  process.exit(0)
+}
+
+const ticker = args[0]
+if (!ticker || ticker.startsWith('--')) { console.error('usage: node scripts/find-stock.mjs <TICKER> [--write] | --list | --dump'); process.exit(2) }
+const write = args.includes('--write')
 
 const r = await resolveStock(ticker, rpc, (m) => console.log(`  · ${m}`))
 if (!r.ok) {

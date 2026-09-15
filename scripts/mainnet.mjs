@@ -19,7 +19,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createPublicClient, formatEther, http, isAddress, parseAbi } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { resolveStock, setEnvValue } from './lib/find-stock.mjs'
+import { fetchRegistry, listRegistry, resolveStock, setEnvValue } from './lib/find-stock.mjs'
 
 const root = resolve(new URL('..', import.meta.url).pathname)
 const contracts = resolve(root, 'contracts')
@@ -65,7 +65,15 @@ if (!isAddress(STOCK)) {
     STOCK = r.address
     if (existsSync(envFile)) writeFileSync(envFile, setEnvValue(readFileSync(envFile, 'utf8'), 'STOCK', STOCK))
     ok(`STOCK resolved for ${TICKER}`, `${STOCK} (symbol ${r.symbol}, uiMultiplier ${formatEther(r.multiplier)}, via ${r.source}; pinned in .env.mainnet)`)
-  } else bad('STOCK', `${r.reason}. Set STOCK=0x… in .env.mainnet yourself (docs.robinhood.com/chain/contracts).`)
+  } else {
+    bad('STOCK', `${r.reason}. Set STOCK=0x… in .env.mainnet yourself (docs.robinhood.com/chain/contracts).`)
+    try {
+      const listed = listRegistry(await fetchRegistry())
+      const ours = JSON.parse(readFileSync(resolve(root, 'src/contracts/series.json'), 'utf8')).map((s) => s.ticker)
+      const both = listed.filter((c) => ours.includes(c.symbol.toUpperCase()))
+      if (both.length) console.log(`  · tickers that exist both on chain and in series.json: ${both.map((c) => c.symbol).join(', ')} → set TICKER and SERIES_ID in .env.mainnet to one of them`)
+    } catch { /* registry already reported above */ }
+  }
 }
 // addresses first, so a placeholder left in .env.mainnet is named instead of surfacing as an RPC error
 for (const [k, v, optional] of [['STOCK', STOCK], ['TREASURY', TREASURY], ['GUARDIAN', GUARDIAN], ['OWNER', OWNER], ['PRICE_FEED', PRICE_FEED, true], ['NPM', NPM, true], ['ACCOUNTANT', env.ACCOUNTANT ?? '', true]]) {

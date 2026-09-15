@@ -28,7 +28,7 @@ export function symbolMatches(symbol, ticker) {
  * ticker. Chain ids come from chainId-like fields, from numeric object keys ({ "4663": { address } }) or
  * from a network name containing "robinhood".
  */
-export function findCandidates(json, ticker) {
+export function findCandidates(json, ticker = null) {
   const out = []
   const seen = new Set()
   const walk = (node, ctx) => {
@@ -41,7 +41,7 @@ export function findCandidates(json, ticker) {
       if (net && /robinhood/i.test(net)) chain = CHAIN_ID
     }
     const next = { symbol: sym ?? ctx?.symbol, chainId: chain !== undefined ? Number(chain) : ctx?.chainId }
-    if (next.symbol && symbolMatches(next.symbol, ticker)) {
+    if (next.symbol && (ticker === null || symbolMatches(next.symbol, ticker))) {
       const addr = ADDRESS_KEYS.map((k) => node[k]).find((v) => typeof v === 'string' && ADDRESS_RE.test(v))
       if (addr) {
         const key = `${addr.toLowerCase()}:${next.chainId ?? ''}`
@@ -52,6 +52,27 @@ export function findCandidates(json, ticker) {
   }
   walk(json, null)
   return out
+}
+
+/** Every token the registry lists on chain 4663 (or without chain info), as "SYMBOL address". */
+export function listRegistry(pages) {
+  const all = pages.flatMap((p) => findCandidates(p, null))
+  const byChain = all.filter((c) => c.chainId === CHAIN_ID || c.chainId === undefined)
+  const seen = new Map()
+  for (const c of byChain) if (!seen.has(norm(c.symbol))) seen.set(norm(c.symbol), c)
+  return [...seen.values()].sort((a, b) => a.symbol.localeCompare(b.symbol))
+}
+
+/** A short description of an unknown JSON shape, for the error message. */
+export function describeShape(json) {
+  if (Array.isArray(json)) return `array of ${json.length}; first item keys: ${json[0] && typeof json[0] === 'object' ? Object.keys(json[0]).join(', ') : typeof json[0]}`
+  if (json && typeof json === 'object') {
+    const keys = Object.keys(json)
+    const listKey = keys.find((k) => Array.isArray(json[k]))
+    const first = listKey ? json[listKey][0] : undefined
+    return `object keys: ${keys.join(', ')}${listKey ? `; ${listKey}[0] keys: ${first && typeof first === 'object' ? Object.keys(first).join(', ') : typeof first}` : ''}`
+  }
+  return typeof json
 }
 
 /** Picks the address to use: the one on chain 4663, else the only candidate without chain info. */
@@ -82,9 +103,14 @@ export async function verifyStock(rpc, address, ticker) {
   return { ok: true, symbol, decimals: Number(decimals), multiplier }
 }
 
+const HEADERS = {
+  accept: 'application/json, text/plain, */*',
+  'accept-language': 'en-US,en;q=0.9',
+  'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36',
+}
 async function getJson(url) {
-  const r = await fetch(url, { headers: { accept: 'application/json', 'user-agent': 'halve-deploy/1.0' } })
-  if (!r.ok) throw new Error(`${url} → HTTP ${r.status}`)
+  const r = await fetch(url, { headers: HEADERS })
+  if (!r.ok) throw new Error(`${url} → HTTP ${r.status}${r.status === 403 ? ' (bot protection; open the URL in a browser instead)' : ''}`)
   return r.json()
 }
 
@@ -118,7 +144,17 @@ export async function resolveStock(ticker, rpc, log = () => {}) {
   const tried = []
   try {
     const pages = await fetchRegistry()
-    const candidates = pages.flatMap((p) => findCandidates(p, ticker))
+    let candidates = pages.flatMap((p) => findCandidates(p, ticker))
+    if (candidates.length === 0) {
+      for (const q of [`${REGISTRY_URL}?symbol=${encodeURIComponent(ticker)}`, `${REGISTRY_URL}?search=${encodeURIComponent(ticker)}`]) {
+        try { candidates = findCandidates(await getJson(q), ticker); if (candidates.length) { log(`found via ${q}`); break } } catch { /* variant not supported */ }
+      }
+    }
+    if (candidates.length === 0) {
+      const listed = listRegistry(pages)
+      if (listed.length) log(`registry lists ${listed.length} tokens on chain ${CHAIN_ID}, ${ticker} is not one of them: ${listed.map((c) => c.symbol).join(' ')}`)
+      else log(`registry returned no recognisable token entries (${describeShape(pages[0])}); run \`node scripts/find-stock.mjs --dump\` and share the output`)
+    }
     const pick = pickCandidate(candidates)
     if (pick?.address) {
       const v = await verifyStock(rpc, pick.address, ticker)
