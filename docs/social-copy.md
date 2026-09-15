@@ -97,33 +97,110 @@ order. 500 characters max per post, no hashtags needed.
 If the Threads handle is not @Halvefinance, change the label in `scripts/render-banners.mjs`
 (`Threads · @Halvefinance`) and re-render.
 
-## Website series (X and Threads, 16:9 `halve-web-0N-*-1920x1080.png` or 4:5 `-1080x1350.png`)
+## Website series (X and Threads)
 
-Real screenshots of the site in a browser frame, one page per post. Re-render after mainnet so the
-numbers in the screenshots are live ones (`pnpm start`, then `SITE_URL=http://127.0.0.1:3000 node scripts/render-banners.mjs`).
+Images: `halve-web-0N-*-1920x1080.png` (16:9, X and Threads) or `-1080x1350.png` (4:5, Threads feed).
+Real screenshots of the site in a browser frame, one page per post. Re-render after mainnet so the numbers
+in the screenshots are live ones (`pnpm start`, then `SITE_URL=http://127.0.0.1:3000 node scripts/render-banners.mjs`).
+Until then, add "Numbers shown are demo data." to the first post if you publish before launch.
 
-**01 · Introducing** (`halve-web-01-home`)
+### X thread (one image per post, all under 280 characters)
+
+**01 · Introducing (`halve-web-01-home`)**
 
 > Meet halve.finance.
 >
-> Fixed yield and dividend tokens for tokenized stocks, live on Robinhood Chain. Split a share into the share at a discount and every dividend it pays until a fixed date. Merge back any time, free.
+> Fixed yield and dividend tokens for tokenized stocks, live on Robinhood Chain.
 >
-> halve.finance
+> Split a share into two tokens: the share at a discount, and every dividend it pays until a fixed date. Merge back any time, free.
+>
+> A short tour of the site, in four posts.
 
-**02 · The app** (`halve-web-02-app`)
+**02 · The app (`halve-web-02-app`)**
 
-> One screen. Pick a series, read the PT price, the YT price and the dividend ledger straight from chain, then split in one transaction. Merge back is always open and always free.
+> The app. One screen.
+>
+> Pick a series. The PT price, the YT price and the dividend ledger are read straight from chain, every 12 seconds. Type an amount, split in one transaction.
+>
+> Merge back is always open and always free. No claim button, ever.
 >
 > halve.finance/app
 
-**03 · Dividend oracle** (`halve-web-03-oracle`)
+**03 · Dividend oracle (`halve-web-03-oracle`)**
 
-> The feed that knows a split from a payout. One accountant per stock token classifies every corporate action by rule, on-chain. Anything ambiguous waits two days in public. Free for any protocol to read.
+> The dividend oracle.
+>
+> One accountant per stock token classifies every corporate action by rule, on-chain: small growth is a dividend, a clean ratio is a split, anything else waits two days in public.
+>
+> Free for any protocol to read.
 >
 > halve.finance/oracle
 
-**04 · Docs** (`halve-web-04-docs`)
+**04 · Docs (`halve-web-04-docs`)**
 
-> Read the contracts before you trust them. Lifecycle, maths, fees, addresses, the accountant rules and the HTTP API on one page. No audit yet, and the page says so.
+> The docs.
+>
+> Lifecycle, maths, fees, contract addresses, the accountant rules and the HTTP API, on one page. Contracts are open source under MIT.
+>
+> No audit yet, and the page says so. Read the contracts before you trust them.
 >
 > halve.finance/docs
+
+**Single post** (when you only post the first image)
+
+> Meet halve.finance: fixed yield and dividend tokens for tokenized stocks, live on Robinhood Chain. Split a share into the share at a discount and every dividend it pays until a fixed date. Merge back any time, free. halve.finance
+
+**Reply lines** for the thread's comments
+
+> Contracts, addresses and the $HALVE CA are announced on this account first. There is no CA yet.
+
+> Merge is never gated: not by liquidity, not by a corporate action, not by maturity. That is what keeps PT + YT worth one share.
+
+### Threads (post 01 as the root, 02–04 as replies, all under 500 characters)
+
+**01 · Introducing (`halve-web-01-home`)**
+
+> Meet halve.finance.
+>
+> Your stock tokens pay dividends. Halve lets you split a tokenized stock or ETF into two tokens you can own separately: PT, the share at a discount, and YT, every dividend it pays until a fixed date.
+>
+> Keep both, or keep the half you want. Merge back any time, free. Live on Robinhood Chain.
+>
+> Four posts, one per page of the site. Start here → halve.finance
+
+**02 · The app (`halve-web-02-app`)**
+
+> The app, one screen.
+>
+> Pick a series. PT price, YT price and the dividend ledger come straight from chain and refresh every 12 seconds. Type an amount, see exactly what you get, split in one transaction.
+>
+> Merge back is always open and always free. There is no claim button anywhere: dividends compound inside the token and pay once, at maturity.
+>
+> halve.finance/app
+
+**03 · Dividend oracle (`halve-web-03-oracle`)**
+
+> The dividend oracle.
+>
+> One accountant per stock token watches the issuer's multiplier and classifies every change by rule: small growth is a dividend, a clean ratio is a split, anything else waits two days in public before a guardian can act.
+>
+> Any protocol can read it for free. Wire isSynced() into your pause and you have a circuit breaker for every corporate action.
+>
+> halve.finance/oracle
+
+**04 · Docs (`halve-web-04-docs`)**
+
+> The docs.
+>
+> Everything on one page: the lifecycle of a series, the maths, the fees (0.10% to split, 5% on redeemed yield, merge free), contract addresses, the accountant rules and the HTTP API. Contracts are open source under MIT.
+>
+> No audit yet, and the page says so. Read the contracts before you trust them.
+>
+> halve.finance/docs
+
+### Alt text
+
+- 01: Screenshot of halve.finance in a browser: "Lock in a fixed yield on your stock tokens. Or buy the dividends outright." Caption: Meet halve.finance.
+- 02: Screenshot of the Halve app: series selector, fixed APY, YT price, dividend ledger and the Split panel. Caption: Split, hold, merge. One screen.
+- 03: Screenshot of the Halve dividend oracle table: one accountant per stock token, synced or held. Caption: The feed that knows a split from a payout.
+- 04: Screenshot of the Halve docs page: overview, lifecycle, maths, contracts. Caption: Read the contracts before you trust them.
