@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 export type AppTab = 'buy' | 'split' | 'earn' | 'portfolio' | 'lend' | 'oracle'
 
 const TABS: { key: AppTab; href: string; label: string }[] = [
-  { key: 'buy', href: '/app?tab=buy', label: 'Buy' },
+  { key: 'buy', href: '/app?tab=buy', label: 'Trade' },
   { key: 'split', href: '/app?tab=split', label: 'Split' },
   { key: 'earn', href: '/app?tab=earn', label: 'Earn' },
   { key: 'portfolio', href: '/app?tab=portfolio', label: 'Portfolio' },

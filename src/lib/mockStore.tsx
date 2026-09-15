@@ -7,14 +7,18 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { ActivityRow } from './activity'
 
 export type MockPos = { pt: number; yt: number; lp: number }
-type State = { pos: Record<string, MockPos>; log: ActivityRow[] }
+/** A demo limit order: sits open until cancelled (nothing moves the demo price through it). */
+export type MockOrder = { id: string; ticker: string; token: 'pt' | 'yt'; side: 'buy' | 'sell'; price: number; amount: number; ts: number }
+type State = { pos: Record<string, MockPos>; log: ActivityRow[]; orders: MockOrder[] }
 type Store = State & {
   update: (ticker: string, fn: (p: MockPos) => MockPos) => void
   record: (row: ActivityRow) => void
+  addOrder: (o: MockOrder) => void
+  removeOrder: (id: string) => void
 }
 
 const KEY = 'halve:mock:v2'
-const EMPTY: State = { pos: {}, log: [] }
+const EMPTY: State = { pos: {}, log: [], orders: [] }
 const Ctx = createContext<Store | null>(null)
 
 function load(): State {
@@ -22,7 +26,7 @@ function load(): State {
     const raw = sessionStorage.getItem(KEY)
     if (!raw) return EMPTY
     const j = JSON.parse(raw) as Partial<State>
-    return { pos: j.pos ?? {}, log: Array.isArray(j.log) ? j.log : [] }
+    return { pos: j.pos ?? {}, log: Array.isArray(j.log) ? j.log : [], orders: Array.isArray(j.orders) ? j.orders : [] }
   } catch {
     return EMPTY
   }
@@ -49,7 +53,13 @@ export function MockPositionProvider({ children }: { children: ReactNode }) {
       return next
     })
   }, [])
-  const value = useMemo(() => ({ ...state, update, record }), [state, update, record])
+  const addOrder = useCallback((o: MockOrder) => {
+    setState((prev) => { const next = { ...prev, orders: [...prev.orders, o] }; save(next); return next })
+  }, [])
+  const removeOrder = useCallback((id: string) => {
+    setState((prev) => { const next = { ...prev, orders: prev.orders.filter((o) => o.id !== id) }; save(next); return next })
+  }, [])
+  const value = useMemo(() => ({ ...state, update, record, addOrder, removeOrder }), [state, update, record, addOrder, removeOrder])
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }
 

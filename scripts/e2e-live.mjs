@@ -95,6 +95,7 @@ try {
     NEXT_PUBLIC_RPC_URL: RPC,
     NEXT_PUBLIC_UNISWAP_ROUTER: uni.router,
     NEXT_PUBLIC_UNISWAP_QUOTER: uni.quoter,
+    NEXT_PUBLIC_UNISWAP_NPM: uni.npm,
     NEXT_PUBLIC_WETH: uni.weth,
     SERIES_FILE: seriesFile,
     NEXT_DIST_DIR: '.next-live',

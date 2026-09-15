@@ -8,7 +8,8 @@ import { privateKeyToAccount } from 'viem/accounts'
  * its unlocked accounts, so approve / split / merge go through the same wagmi path as MetaMask would.
  */
 const RPC = process.env.E2E_RPC ?? 'http://127.0.0.1:8545'
-const SERIES = JSON.parse(process.env.E2E_SERIES ?? '{}') as { id: string; ticker: string; underlying: Address; vault: Address; accountant: Address }
+const SERIES = JSON.parse(process.env.E2E_SERIES ?? '{}') as { id: string; ticker: string; underlying: Address; vault: Address; accountant: Address; pt: Address; poolPT: Address }
+const ROUTER = process.env.NEXT_PUBLIC_UNISWAP_ROUTER as Address
 const USER = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8'
 const DEPLOYER = privateKeyToAccount('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80')
 
@@ -42,9 +43,22 @@ const PROVIDER = `
 })();
 `
 
-const stockAbi = parseAbi(['function setUIMultiplier(uint256 m)', 'function uiMultiplier() view returns (uint256)', 'function balanceOf(address) view returns (uint256)'])
+const stockAbi = parseAbi(['function setUIMultiplier(uint256 m)', 'function uiMultiplier() view returns (uint256)', 'function balanceOf(address) view returns (uint256)', 'function mint(address, uint256)', 'function approve(address, uint256) returns (bool)'])
 const acctAbi = parseAbi(['function sync()', 'function dividendIndex() view returns (uint256)'])
-const vaultAbi = parseAbi(['function totalDeposits() view returns (uint256)'])
+const vaultAbi = parseAbi(['function totalDeposits() view returns (uint256)', 'function split(uint256 amount) returns (uint256)'])
+const routerAbi = parseAbi(['function exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) payable returns (uint256)'])
+const poolAbi = parseAbi(['function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16, uint16, uint16, uint8, bool)', 'function token0() view returns (address)'])
+
+/** The deployer mints fresh stock, splits it and dumps PT into the pool, so the PT price falls through any limit below it. */
+async function crashPtPrice(ptAmount: bigint) {
+  const send = async (req: Parameters<typeof deployer.writeContract>[0]) => pub.waitForTransactionReceipt({ hash: await deployer.writeContract(req) })
+  const stock = ptAmount + parseEther('1')
+  await send({ address: SERIES.underlying, abi: stockAbi, functionName: 'mint', args: [DEPLOYER.address, stock], chain: null })
+  await send({ address: SERIES.underlying, abi: stockAbi, functionName: 'approve', args: [SERIES.vault, stock], chain: null })
+  await send({ address: SERIES.vault, abi: vaultAbi, functionName: 'split', args: [stock], chain: null })
+  await send({ address: SERIES.pt, abi: stockAbi, functionName: 'approve', args: [ROUTER, ptAmount], chain: null })
+  await send({ address: ROUTER, abi: routerAbi, functionName: 'exactInputSingle', args: [{ tokenIn: SERIES.pt, tokenOut: SERIES.underlying, fee: 3000, recipient: DEPLOYER.address, amountIn: ptAmount, amountOutMinimum: 0n, sqrtPriceLimitX96: 0n }], chain: null })
+}
 
 const pub = createPublicClient({ transport: http(RPC) })
 const deployer = createWalletClient({ account: DEPLOYER, transport: http(RPC) })
@@ -155,5 +169,70 @@ test.describe.serial('live chain', () => {
     await expect(page.locator('#txlink')).toHaveAttribute('href', /blockscout\.com\/tx\/0x[0-9a-f]{64}$/)
     // the PT landed in the wallet: 4.99 from before + ≈ 0.5
     await expect(page.locator('#pos')).toContainText(new RegExp(`p${t}5\\.[45]\\d\\d`)) // 4.99 held before + ≈ 0.52 bought
+  })
+
+  test('limit buy: a one-tick position below the market, filled when the price drops, claimed as PT', async ({ page }) => {
+    await connect(page)
+    const t = SERIES.ticker
+    await page.click('#tBuy')
+    await page.locator('#payWith button', { hasText: t }).click()
+    await page.locator('#orderType button', { hasText: 'Limit' }).click()
+    await page.fill('#amt', '10')
+    await page.fill('#limitPrice', '0.99') // PT trades at ≈ 0.96: above the market is refused
+    await expect(first(page, '#limitHint')).toContainText('must sit below the current price')
+    await expect(first(page, '#go')).toBeDisabled()
+    await page.fill('#limitPrice', '0.94')
+    await expect(first(page, '#limitHint')).toContainText(new RegExp(`fills between 0\\.93\\d\\d and 0\\.9[34]\\d\\d ${t}`))
+    await expect(first(page, '#o1')).toHaveText(new RegExp(`^10\\.[5-7]\\d{3} p${t}$`)) // 10 stock at ≈ 0.933 (the tick below 0.94)
+    await expect(first(page, '#go')).toHaveText('Place limit buy')
+    await page.click('#go') // approve + mint
+    await expect(page.locator('#toast')).toHaveText(new RegExp(`^Order placed: Buy p${t} at ≤ 0\\.9[34]\\d\\d ${t}$`), { timeout: 30_000 })
+    const row = page.locator('#orders .row').first()
+    await expect(row).toContainText(`Buy p${t} at ≤ 0.9`, { timeout: 30_000 })
+    await expect(row).toContainText(`Open · waiting with 10.0000 ${t}`)
+    await expect(first(page, '#bal')).toHaveText('985.00') // 995 − 10 moved into the position
+
+    // the deposit side survives without the local record: it is read back from the mint's IncreaseLiquidity event
+    await page.evaluate(() => localStorage.removeItem('halve:orders:v1'))
+    await connect(page) // a fresh page: the fake wallet forgets its approval on reload, so connect again
+    await page.click('#tBuy')
+    await expect(page.locator('#orders .row').first()).toContainText(`Buy p${t} at ≤ 0.9`, { timeout: 30_000 })
+
+    // the market falls ≈ 7 %: the order sits in the way and is converted by the pool
+    await crashPtPrice(parseEther('400'))
+    const tick = (await pub.readContract({ address: SERIES.poolPT, abi: poolAbi, functionName: 'slot0' }))[1]
+    const ptIsToken0 = (await pub.readContract({ address: SERIES.poolPT, abi: poolAbi, functionName: 'token0' })).toLowerCase() === SERIES.pt.toLowerCase()
+    expect(ptIsToken0 ? tick : -tick).toBeLessThan(-600) // stock per PT < 0.94 whichever way round the pool is
+    await expect(row).toContainText('Filled', { timeout: 30_000 })
+    await expect(row).toContainText(new RegExp(`10\\.[5-7]\\d{3} p${t} ready`))
+    const before = await pub.readContract({ address: SERIES.pt, abi: stockAbi, functionName: 'balanceOf', args: [USER] })
+    await row.locator('button', { hasText: 'Claim' }).click() // decreaseLiquidity + collect + burn in one multicall
+    await expect(page.locator('#toast')).toHaveText(new RegExp(`^Claimed 10\\.[5-7]\\d+ p${t}$`), { timeout: 30_000 })
+    await expect(page.locator('#orders')).toContainText('No orders', { timeout: 30_000 })
+    const got = (await pub.readContract({ address: SERIES.pt, abi: stockAbi, functionName: 'balanceOf', args: [USER] })) - before
+    expect(got).toBeGreaterThan(parseEther('10.5'))
+    expect(got).toBeLessThan(parseEther('10.8'))
+  })
+
+  test('market sell: PT → stock in one hop, PT → stock → ETH with the router unwrapping WETH', async ({ page }) => {
+    await connect(page)
+    const t = SERIES.ticker
+    await page.click('#tBuy')
+    await page.locator('#dir button', { hasText: 'Sell' }).click()
+    await expect(first(page, '#inAsset')).toHaveText(`p${t}`)
+    await page.locator('#payWith button', { hasText: t }).click()
+    await page.fill('#amt', '1')
+    await expect(first(page, '#o1')).toHaveText(new RegExp(`^0\\.8[6-9]\\d\\d ${t}$`), { timeout: 30_000 }) // PT ≈ 0.89 after the crash, less the fee
+    await expect(first(page, '#route')).toHaveText(`p${t} → ${t}`)
+    await page.click('#go')
+    await expect(page.locator('#toast')).toHaveText(new RegExp(`^Sold 1 p${t} for 0\\.8[6-9]\\d+ ${t}$`), { timeout: 30_000 })
+    await page.locator('#payWith button', { hasText: 'ETH' }).click()
+    await page.fill('#amt', '1')
+    await expect(first(page, '#o1')).toHaveText(/^0\.01[6-8]\d ETH$/, { timeout: 30_000 }) // ≈ 0.887 stock / 50 per ETH, less two fees, 4 dp
+    await expect(first(page, '#route')).toContainText(`p${t} → ${t} (0.3%) → ETH`)
+    const ethBefore = await pub.getBalance({ address: USER })
+    await page.click('#go')
+    await expect(page.locator('#toast')).toHaveText(new RegExp(`^Sold 1 p${t} for 0\\.01[6-8]\\d+ ETH$`), { timeout: 30_000 })
+    expect((await pub.getBalance({ address: USER })) - ethBefore).toBeGreaterThan(parseEther('0.015')) // net of gas on anvil
   })
 })

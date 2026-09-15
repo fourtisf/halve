@@ -1,6 +1,6 @@
 /** Wallet activity (splits, merges, redemptions) and a simple PnL. Pure; unit-tested. */
 
-export type ActivityAction = 'Split' | 'Merge' | 'Redeem PT' | 'Redeem YT' | 'Buy'
+export type ActivityAction = 'Split' | 'Merge' | 'Redeem PT' | 'Redeem YT' | 'Buy' | 'Sell' | 'Limit order' | 'Order closed'
 
 export type ActivityRow = {
   id: string // series id

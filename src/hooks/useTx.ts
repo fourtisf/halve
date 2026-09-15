@@ -2,7 +2,7 @@
 import { useCallback, useState } from 'react'
 import { useAccount, usePublicClient, useWriteContract } from 'wagmi'
 import { useQueryClient } from '@tanstack/react-query'
-import type { Abi, Address, Hash } from 'viem'
+import type { Abi, Address, Hash, TransactionReceipt } from 'viem'
 import { erc20Abi } from '@/contracts/abis'
 import { CHAIN_ID } from '@/lib/wagmi'
 import { invalidateChainReads } from '@/lib/queries'
@@ -33,9 +33,10 @@ export function useTx() {
   )
 
   const run = useCallback(
-    async (steps: (Step | null)[], onDone: string): Promise<boolean> => {
-      if (!address || !publicClient) { toast('Connect wallet'); return false }
+    async (steps: (Step | null)[], onDone: string): Promise<TransactionReceipt | null> => {
+      if (!address || !publicClient) { toast('Connect wallet'); return null }
       setTxHash(null)
+      let last: TransactionReceipt | null = null
       try {
         for (const step of steps) {
           if (!step) continue
@@ -45,15 +46,16 @@ export function useTx() {
           setStatus('confirming')
           const rc = await publicClient.waitForTransactionReceipt({ hash })
           if (rc.status !== 'success') throw new Error(`${step.functionName} reverted`)
+          last = rc
         }
         setStatus('done')
         toast(onDone)
         invalidateChainReads(qc)
-        return true
+        return last
       } catch (e) {
         setStatus('error')
         toast(shortError(e))
-        return false
+        return null
       } finally {
         setStatus('idle')
       }

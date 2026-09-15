@@ -19,8 +19,17 @@ export const applySlippage = (amountOut: bigint, bps = DEFAULT_SLIPPAGE_BPS): bi
 
 export type Route = { tokens: Address[]; fees: number[]; label: string }
 
-/** Candidate routes: pay with the stock directly (one hop), or with ETH through every fee tier of the WETH/stock pool. */
-export function candidateRoutes(payWith: 'eth' | 'stock', weth: Address, stock: Address, token: Address, poolFee: number, symbols: { stock: string; token: string }): Route[] {
+export type Direction = 'buy' | 'sell'
+
+/**
+ * Candidate routes. Buy: pay with the stock directly (one hop) or with ETH through every fee tier of the WETH/stock
+ * pool. Sell: the same hops reversed, ending in the stock or in ETH.
+ */
+export function candidateRoutes(payWith: 'eth' | 'stock', weth: Address, stock: Address, token: Address, poolFee: number, symbols: { stock: string; token: string }, direction: Direction = 'buy'): Route[] {
+  if (direction === 'sell') {
+    if (payWith === 'stock') return [{ tokens: [token, stock], fees: [poolFee], label: `${symbols.token} → ${symbols.stock}` }]
+    return FEE_TIERS.map((f) => ({ tokens: [token, stock, weth], fees: [poolFee, f], label: `${symbols.token} → ${symbols.stock} (${f / 10_000}%) → ETH` }))
+  }
   if (payWith === 'stock') return [{ tokens: [stock, token], fees: [poolFee], label: `${symbols.stock} → ${symbols.token}` }]
   return FEE_TIERS.map((f) => ({ tokens: [weth, stock, token], fees: [f, poolFee], label: `ETH → ${symbols.stock} (${f / 10_000}%) → ${symbols.token}` }))
 }
@@ -40,6 +49,8 @@ export const swapRouter02Abi = [
     ] }],
     outputs: [{ name: 'amountOut', type: 'uint256' }],
   },
+  { type: 'function', name: 'unwrapWETH9', stateMutability: 'payable', inputs: [{ name: 'amountMinimum', type: 'uint256' }, { name: 'recipient', type: 'address' }], outputs: [] },
+  { type: 'function', name: 'multicall', stateMutability: 'payable', inputs: [{ name: 'data', type: 'bytes[]' }], outputs: [{ name: 'results', type: 'bytes[]' }] },
 ] as const
 
 export const quoterV2Abi = [

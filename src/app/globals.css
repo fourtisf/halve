@@ -149,6 +149,13 @@ tbody tr{cursor:pointer;transition:.15s}tbody tr:hover{background:var(--bg2)}tbo
 .howto{border:1px solid var(--line);border-radius:10px;padding:0 12px;margin-top:12px;font-size:12px;color:var(--fg2)}
 .howto summary{padding:10px 0;font-size:12.5px}
 .howto ol{padding:0 0 12px 16px;line-height:1.6}.howto li+li{margin-top:6px}.howto li b{color:var(--fg);font-weight:500}.howto a{color:var(--fg);text-decoration:underline}
+.side-sel.dir{margin-bottom:14px}.side-sel.dir button{flex:1;text-align:center;font-weight:500;padding:7px 10px}
+.side-sel.dir button.sell.on{border-color:var(--red);color:var(--red)}
+.side-sel button:disabled{opacity:.4;cursor:not-allowed}
+.hint{font-size:11.5px;color:var(--fg3);line-height:1.5;margin:-2px 0 10px}.hint.r{color:var(--red)}
+.orders .row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line);font-size:12px}
+.orders .row:first-child{border-top:0;padding-top:0}.orders .row b{display:block;font-weight:500;font-size:12.5px}.orders .row span{display:block;font-size:11.5px;margin-top:2px}
+.orders .row button{flex:none}
 @media (max-width:400px){.pick{grid-template-columns:1fr}}
 
 /* lend */

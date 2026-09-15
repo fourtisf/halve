@@ -132,3 +132,15 @@ Two local rehearsals exist and run in CI: `pnpm test:e2e:live` (real Uniswap v3 
 manager on anvil, seeded pools, split / merge / dividend through the UI) and
 `pnpm rehearse:mainnet`, which runs `scripts/mainnet.mjs` itself, dry run and real, against anvil with a
 generated `.env` and checks that `series.json` comes out filled.
+
+## Limit orders
+
+The Trade tab's Limit option needs no extra contract: an order is a one-tick Uniswap v3 position minted
+through the NonfungiblePositionManager (`NEXT_PUBLIC_UNISWAP_NPM`, default: the canonical deployment in the
+table above) just below the market for a buy or above it for a sell. The pool converts it when the price
+crosses the tick, at the limit or better, and the position earns the pool fee. "Claim" and "Cancel" are the
+same call: `multicall([decreaseLiquidity, collect, burn])`, which returns whatever the position holds to the
+wallet. The app lists a wallet's one-tick positions in the PT and YT pools as its orders; the buy/sell side
+is remembered in the browser at placement and otherwise read back from the position's `IncreaseLiquidity`
+event (the RPC must serve `eth_getLogs` from the series' `deployBlock`). A filled order that is not claimed
+converts back if the price crosses the tick again; the UI says so under the orders list.

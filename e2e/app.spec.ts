@@ -45,7 +45,7 @@ test.describe('/app (mock mode)', () => {
   test('buy tab: quotes PT/YT for ETH or the stock and the demo wallet can buy', async ({ page }) => {
     await page.goto('/app?s=1&tab=buy')
     await expect(page.locator('#tBuy')).toHaveClass(/on/)
-    await expect(page.locator('.appbar a.on')).toHaveText('Buy')
+    await expect(page.locator('.appbar a.on')).toHaveText('Trade')
     await expect(text(page, '#inLbl')).toHaveText('You pay')
     await expect(text(page, '#inAsset')).toHaveText('ETH')
     await expect(page.locator('#amt')).toHaveValue('0.1')
@@ -54,7 +54,7 @@ test.describe('/app (mock mode)', () => {
     await expect(page.locator('#buySide button.pt')).toContainText('8.3%')
     await expect(page.locator('#buySide button.pt')).toContainText('In Mar 2027 it becomes 1 full SCHD')
     await expect(page.locator('#buySide button.yt')).toContainText('4.1%')
-    await expect(page.locator('.step')).toHaveCount(3)
+    await expect(page.locator('.step')).toHaveCount(4)
     await expect(page.locator('#howto summary')).toHaveText('New to this? Three steps')
     await expect(page.locator('#howto a')).toHaveAttribute('href', 'https://docs.robinhood.com/chain/bridging/')
     await page.fill('#amt', '0.1')
@@ -77,6 +77,40 @@ test.describe('/app (mock mode)', () => {
     await page.click('#go')
     await expect(page.locator('#toast')).toHaveText(/^Bought 24\.1\d+ ySCHD with 1 SCHD$/)
     await expect(page.locator('#pos')).toContainText('ySCHD')
+  })
+
+  test('limit orders and selling (demo): validation, place, list, cancel, sell quotes', async ({ page }) => {
+    await page.goto('/app?s=1&tab=buy')
+    await page.locator('#payWith button', { hasText: 'SCHD' }).click()
+    await page.locator('#orderType button', { hasText: 'Limit' }).click()
+    await page.fill('#amt', '10')
+    await page.fill('#limitPrice', '0.99') // above the market (PT trades at 0.9587)
+    await expect(text(page, '#limitHint')).toContainText('must sit below the current price')
+    await page.fill('#limitPrice', '0.9')
+    await expect(text(page, '#limitHint')).toContainText(/fills between 0\.89\d\d and 0\.[89]\d\d\d SCHD/)
+    await expect(text(page, '#o1')).toHaveText(/^11\.\d{4} pSCHD$/) // 10 SCHD at ≈ 0.897 → ≈ 11.15 pSCHD
+    await expect(text(page, '#go')).toHaveText('Connect wallet')
+    await page.click('#wbtn')
+    await page.click('#wdemo')
+    await expect(text(page, '#go')).toHaveText('Place limit buy')
+    await page.click('#go')
+    await expect(page.locator('#toast')).toHaveText(/^Order placed: Buy pSCHD at ≤ 0\.89\d\d SCHD$/)
+    const row = page.locator('#orders .row').first()
+    await expect(row).toContainText('Buy pSCHD at ≤ 0.89')
+    await expect(row).toContainText('Open · waiting with 10.0000 SCHD')
+    await row.locator('button', { hasText: 'Cancel' }).click()
+    await expect(page.locator('#toast')).toHaveText('Order cancelled')
+    await expect(page.locator('#orders')).toContainText('No orders')
+    // sell side, market: 1 pSCHD → 0.9587 × 0.997 SCHD, or the same in ETH at $4,000
+    await page.locator('#dir button', { hasText: 'Sell' }).click()
+    await expect(text(page, '#inLbl')).toHaveText('You sell')
+    await expect(text(page, '#inAsset')).toHaveText('pSCHD')
+    await page.locator('#orderType button', { hasText: 'Market' }).click()
+    await page.fill('#amt', '1')
+    await expect(text(page, '#o1')).toHaveText(/^0\.955\d SCHD$/)
+    await page.locator('#payWith button', { hasText: 'ETH' }).click()
+    await expect(text(page, '#o1')).toHaveText('0.0069 ETH') // 0.9558 SCHD × $28.90 / $4,000
+    await expect(text(page, '#go')).toHaveText('Insufficient pSCHD') // the demo wallet holds none yet
   })
 
   test('url params pick tab and side', async ({ page }) => {
