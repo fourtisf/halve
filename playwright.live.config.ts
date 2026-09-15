@@ -14,6 +14,7 @@ export default defineConfig({
   projects: [{ name: 'live', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
     command: `pnpm start -p ${PORT}`,
+    env: { ...(process.env as Record<string, string>), LIVE_MARKET: 'false' }, // deterministic demo numbers
     url: `http://localhost:${PORT}`,
     reuseExistingServer: false,
     timeout: 60_000,

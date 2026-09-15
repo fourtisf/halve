@@ -4,6 +4,7 @@ import { SERIES, hasPlaceholderAddresses } from '@/contracts/types'
 import { MOCK } from '@/lib/env'
 import { CHAIN_ID, RPC_HTTP, robinhood } from '@/lib/chain'
 import { historyBackend, lastSampleTs } from '@/lib/kv'
+import { peekMarket } from '@/lib/market-server'
 import pkg from '../../../../package.json'
 
 export const dynamic = 'force-dynamic'
@@ -39,6 +40,7 @@ export async function GET() {
     rpc,
     series: { total: SERIES.length, live: live.length, ids: live.map((s) => s.id) },
     history,
+    market: peekMarket(),
   }
   return NextResponse.json(body, { status: ok ? 200 : 503, headers: { 'Cache-Control': 'no-store' } })
 }

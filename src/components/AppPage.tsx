@@ -17,21 +17,24 @@ import { useAllSeriesStats } from '@/hooks/useSeriesStats'
 import { useLedger } from '@/hooks/useLedger'
 import { usePosition } from '@/hooks/usePosition'
 import { useYtHistory } from '@/hooks/useYtHistory'
+import { useMarket } from '@/hooks/useMarket'
 import { MOCK } from '@/lib/env'
 import { fmtInt, monthYear } from '@/lib/format'
 import { MOCK_START_BLOCK, mockStats } from '@/lib/mock'
 import { CHAIN_ID } from '@/lib/wagmi'
 
-/** "block 4,812,337" — live block number, or the prototype's ticking counter in MOCK mode. */
+/** "block 4,812,337" — the chain's block number (live mode, or the preview), else the prototype's ticking counter. */
 function BlockLabel() {
-  const { data } = useBlockNumber({ chainId: CHAIN_ID, watch: !MOCK, query: { enabled: !MOCK } })
+  const { preview } = useMarket()
+  const real = !MOCK || preview
+  const { data } = useBlockNumber({ chainId: CHAIN_ID, watch: real, query: { enabled: real } })
   const [mockBlock, setMockBlock] = useState(MOCK_START_BLOCK)
   useEffect(() => {
-    if (!MOCK) return
+    if (real) return
     const id = setInterval(() => setMockBlock((b) => b + 1), 2500)
     return () => clearInterval(id)
-  }, [])
-  const n = MOCK ? mockBlock : data
+  }, [real])
+  const n = real ? data : mockBlock
   return <span id="blk">{n != null ? `block ${fmtInt(n)}` : 'block —'}</span>
 }
 
@@ -71,8 +74,9 @@ export function AppPage() {
             <h4><span id="aTtl" style={{ fontSize: 14, color: 'var(--fg)', fontFamily: 'var(--font-inter), Inter, system-ui, sans-serif' }}>{series.ticker} · {monthYear(series.maturity)}</span><BlockLabel /></h4>
             <SeriesSelector current={index} onPick={pick} />
             {all.isError && <Banner kind="r">{RPC_ERROR_TEXT}</Banner>}
+            {stats.isPreview && <Banner kind="y">Preview · real share price and trailing dividend yield. p{series.ticker} and y{series.ticker} prices are indicative until the pools open.</Banner>}
             <KPIs stats={stats} ytChange24h={history.change24hPct} tvlChange7d={history.tvlChange7dPct} />
-            <YtChart ticker={series.ticker} points={history.points} days={history.days} changePct={history.changePct} />
+            <YtChart ticker={series.ticker} points={history.points} days={history.days} changePct={history.changePct} label={history.source === 'market' ? `${series.ticker} · ${history.days}d · share price` : undefined} />
           </div>
           <DividendLedger ledger={ledger} />
         </div>

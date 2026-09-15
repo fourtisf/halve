@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:preview": "playwright test -c playwright.preview.config.ts",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "check:live": "node scripts/check-live.mjs",
     "abis": "node scripts/sync-abis.mjs",

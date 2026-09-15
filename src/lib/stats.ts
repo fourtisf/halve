@@ -44,7 +44,11 @@ export type Round = readonly [bigint, bigint, bigint, bigint, bigint]
 /** StripVault.state(): 0 Active, 1 Matured (settle() callable), 2 Settled (redeem open). */
 export const VAULT_STATE = { Active: 0, Matured: 1, Settled: 2 } as const
 
-export function parseStats(s: Series, data: readonly ReadResult[] | undefined, base: number, now: number): SeriesStats {
+/**
+ * @param fallbackUsd share price from the market feed, used only when the series has no Chainlink round.
+ *   A raw token is `uiMultiplier` shares (ERC-8056), so the raw-unit price is share price × multiplier.
+ */
+export function parseStats(s: Series, data: readonly ReadResult[] | undefined, base: number, now: number, fallbackUsd?: number | null): SeriesStats {
   const totalDeposits = ok<bigint>(data, base + 0) ?? 0n
   const cap = ok<bigint>(data, base + 1) ?? s.cap
   const d0 = ok<bigint>(data, base + 2)
@@ -69,8 +73,9 @@ export function parseStats(s: Series, data: readonly ReadResult[] | undefined, b
   const ptPrice = slotPT && token0PT ? poolPrice(slotPT[0], token0PT.toLowerCase() === s.pt.toLowerCase(), ptDec, stockDec) : 0
   const ytPrice = slotYT && token0YT ? poolPrice(slotYT[0], token0YT.toLowerCase() === s.yt.toLowerCase(), ytDec, stockDec) : 0
   const years = yearsToMaturity(s.maturity, now)
+  const uiMult = uiMultiplier !== undefined ? wadToNumber(uiMultiplier) : 1
   // Chainlink prices the token with the multiplier inside — do NOT multiply by uiMultiplier again.
-  const usdPrice = round ? Number(round[1]) / 10 ** feedDec : 0
+  const usdPrice = round ? Number(round[1]) / 10 ** feedDec : fallbackUsd != null && fallbackUsd > 0 ? fallbackUsd * uiMult : 0
   const tvlUsd = toNumber(totalDeposits, stockDec) * usdPrice
 
   return {
@@ -90,7 +95,7 @@ export function parseStats(s: Series, data: readonly ReadResult[] | undefined, b
     dividendIndex: dividendIndex !== undefined ? wadToNumber(dividendIndex) : 1,
     d0: d0 !== undefined ? wadToNumber(d0) : 1,
     accrued,
-    uiMultiplier: uiMultiplier !== undefined ? wadToNumber(uiMultiplier) : 1,
+    uiMultiplier: uiMult,
     splitFactor: splitFactor !== undefined ? wadToNumber(splitFactor) : 1,
     isSynced,
     events,

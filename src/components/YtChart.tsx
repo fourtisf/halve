@@ -3,7 +3,7 @@ import { useMemo } from 'react'
 import { f } from '@/lib/format'
 
 /** 30d YT price line — same path math as the prototype's chart(). */
-export function YtChart({ ticker, points, days, changePct }: { ticker: string; points: number[]; days: number; changePct: number | null }) {
+export function YtChart({ ticker, points, days, changePct, label }: { ticker: string; points: number[]; days: number; changePct: number | null; label?: string }) {
   const d = useMemo(() => {
     if (points.length < 2) return ''
     const mn = Math.min(...points)
@@ -16,7 +16,7 @@ export function YtChart({ ticker, points, days, changePct }: { ticker: string; p
   return (
     <div className="chart">
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--fg3)', marginBottom: 8, fontFamily: 'var(--mono)' }}>
-        <span id="chLbl">y{ticker} · {days || 30}d</span>
+        <span id="chLbl">{label ?? `y${ticker} · ${days || 30}d`}</span>
         {change != null && <span className={changePct != null && changePct < 0 ? 'r' : 'g'}>{change}</span>}
       </div>
       <svg viewBox="0 0 600 120" preserveAspectRatio="none">

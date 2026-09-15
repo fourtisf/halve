@@ -3,6 +3,8 @@ export type SeriesStats = {
   isMock: boolean
   /** False while live reads are still loading. */
   ready: boolean
+  /** Demo series overlaid with a live market quote: real price and yield, indicative PT / YT, no TVL yet. */
+  isPreview?: boolean
   ptPrice: number // PT/stock pool price, in stock units
   ytPrice: number // YT/stock pool price, in stock units
   fixedApy: number // fraction: (1/ptPrice)^(1/yearsToMaturity) − 1

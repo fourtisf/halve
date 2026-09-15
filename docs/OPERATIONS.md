@@ -25,6 +25,19 @@ pm2 restart halve --update-env
 curl -fsS https://halve.finance/api/health | jq .
 ```
 
+### Live market prices
+
+`/api/market` fetches the real share price, 30-day closes and trailing dividend yield for every ticker in
+`series.json` (plus ETH-USD) from Yahoo Finance, falling back to Stooq for prices, cached one minute.
+Demo series (no contracts yet) show those numbers with indicative PT / YT prices and "—" for TVL; a
+live series with an empty `priceFeed` uses the quote as its USD price. `LIVE_MARKET=false` turns it off.
+
+```bash
+curl -s https://halve.finance/api/market | jq '{ok, source, updatedAt, stale, errors, spy: .quotes.SPY.price, spyYield: .quotes.SPY.trailingYield, eth: .ethUsd}'
+```
+
+`/api/health` reports the same under `market` without triggering a fetch.
+
 pnpm settings live in `pnpm-workspace.yaml` and the pnpm version in `package.json` (`packageManager`);
 a newer global pnpm hands over to that version by itself. If an install ever stops with
 `ERR_PNPM_IGNORED_BUILDS`, pnpm 11 has written placeholder lines into `pnpm-workspace.yaml`:

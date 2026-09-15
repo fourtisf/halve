@@ -14,6 +14,7 @@ import { useMockPositions } from '@/lib/mockStore'
 import { useToast } from '@/lib/toast'
 import type { SeriesStats } from '@/lib/types'
 import { cleanAmount } from '@/lib/amount'
+import { useMarket } from './useMarket'
 import { isMockSeries } from './useSeries'
 import { useTx } from './useTx'
 
@@ -49,6 +50,7 @@ export function useBuy(series: Series, stats: SeriesStats, side: BuySide, payWit
   const decimalsIn = payWith === 'eth' ? 18 : series.decimals
   const amountIn = a ? parseUnits(a.str, decimalsIn) : 0n
   const eth = useBalance({ address, chainId: CHAIN_ID, query: { enabled: !!address && !mock, refetchInterval: POLL_MS } })
+  const ethUsd = useMarket().ethUsd ?? MOCK_ETH_USD
 
   const q = useQuery({
     queryKey: ['buyQuote', series.id, side, payWith, amountIn.toString()],
@@ -62,9 +64,9 @@ export function useBuy(series: Series, stats: SeriesStats, side: BuySide, payWit
   const mockOut = useMemo(() => {
     if (!mock || !a) return 0
     const priceStock = side === 'pt' ? stats.ptPrice : stats.ytPrice // stock per token
-    const stockIn = payWith === 'eth' ? (a.num * MOCK_ETH_USD) / stats.usdPrice : a.num
+    const stockIn = payWith === 'eth' ? (a.num * ethUsd) / stats.usdPrice : a.num
     return priceStock > 0 ? (stockIn / priceStock) * 0.997 : 0 // 0.3 % pool fee
-  }, [mock, a, side, payWith, stats])
+  }, [mock, a, side, payWith, stats, ethUsd])
 
   const amountOut = mock ? mockOut : q.data ? toNumber(q.data.amountOut, series.decimals) : 0
   const label = mock ? (payWith === 'eth' ? `ETH → ${series.ticker} → ${side === 'pt' ? 'p' : 'y'}${series.ticker}` : `${series.ticker} → ${side === 'pt' ? 'p' : 'y'}${series.ticker}`) : q.data?.route.label ?? null

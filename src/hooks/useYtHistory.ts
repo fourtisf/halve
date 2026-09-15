@@ -10,9 +10,10 @@ import { MOCK_CHART_CHANGE, MOCK_TVL_CHANGE_7D, MOCK_YT_CHANGE_24H, mockChart } 
 import { poolPrice } from '@/lib/math'
 import { resample, type Resampled, type Sample } from '@/lib/history'
 import { CHAIN_ID } from '@/lib/wagmi'
+import { useMarket } from './useMarket'
 import { isMockSeries } from './useSeries'
 
-export type YtHistory = Resampled & { source: 'kv' | 'logs' | 'mock' | 'none'; isMock: boolean }
+export type YtHistory = Resampled & { source: 'kv' | 'logs' | 'market' | 'mock' | 'none'; isMock: boolean }
 
 const swapEvent = getAbiItem({ abi: uniswapV3PoolAbi, name: 'Swap' })
 const EMPTY: YtHistory = { points: [], days: CHART_DAYS, changePct: null, change24hPct: null, tvlChange7dPct: null, source: 'none', isMock: false }
@@ -71,6 +72,7 @@ async function fromLogs(client: PublicClient, s: Series): Promise<YtHistory> {
 
 export function useYtHistory(series: Series, seriesIndex: number): YtHistory {
   const mock = isMockSeries(series)
+  const { quotes } = useMarket()
   const client = usePublicClient({ chainId: CHAIN_ID })
   const q = useQuery({
     queryKey: ['ytHistory', series.id],
@@ -83,6 +85,12 @@ export function useYtHistory(series: Series, seriesIndex: number): YtHistory {
     staleTime: 30_000,
   })
   if (mock) {
+    // preview: the underlying's real 30-day share price (there is no YT pool to chart yet)
+    const q = quotes[series.ticker]
+    if (q && q.closes30d.length >= 2) {
+      const p = q.closes30d
+      return { points: p, days: CHART_DAYS, changePct: p[0] > 0 ? (p[p.length - 1] / p[0] - 1) * 100 : null, change24hPct: q.change24hPct, tvlChange7dPct: null, source: 'market', isMock: true }
+    }
     return { points: mockChart(seriesIndex), days: CHART_DAYS, changePct: MOCK_CHART_CHANGE, change24hPct: MOCK_YT_CHANGE_24H, tvlChange7dPct: MOCK_TVL_CHANGE_7D, source: 'mock', isMock: true }
   }
   return q.data ?? EMPTY

@@ -9,6 +9,7 @@ import { mockLedger } from '@/lib/mock'
 import { buildLedger, type Checkpoint, type PendingTuple } from '@/lib/ledger'
 import { ok, type ReadResult } from '@/lib/stats'
 import type { Ledger } from '@/lib/types'
+import { useMarket } from './useMarket'
 import { isMockSeries } from './useSeries'
 
 const PROBE = 32 // if checkpointCount() is absent, probe checkpointAt(0..31) and stop at the first revert
@@ -16,6 +17,7 @@ const PROBE = 32 // if checkpointCount() is absent, probe checkpointAt(0..31) an
 /** Dividend ledger: checkpointAt(i) for i in 0..n, newest first; pending() rendered as a held row. */
 export function useLedger(series: Series): Ledger {
   const mock = isMockSeries(series)
+  const { preview } = useMarket() // real prices, no accountant yet: the ledger is empty, not the demo's
   const head = useReadContracts({
     contracts: [
       { address: series.accountant, abi: multiplierAccountantAbi, functionName: 'checkpointCount' },
@@ -38,11 +40,12 @@ export function useLedger(series: Series): Ledger {
 
   return useMemo<Ledger>(() => {
     if (mock) {
+      if (preview) return { rows: [], pending: null, events: 0, isLoading: false, isMock: true }
       const { rows, pending } = mockLedger(series.ticker)
       return { rows, pending, events: rows.filter((r) => !r.held).length, isLoading: false, isMock: true }
     }
     const checkpoints = Array.from({ length: n }, (_, i) => ok<Checkpoint>(cpData, i))
     const built = buildLedger(checkpoints, pendingRaw, { probing: count === undefined, now: Date.now() / 1000 })
     return { ...built, isLoading: head.isLoading || (n > 0 && cps.isLoading), isMock: false }
-  }, [mock, series.ticker, n, count, cpData, pendingRaw, head.isLoading, cps.isLoading])
+  }, [mock, preview, series.ticker, n, count, cpData, pendingRaw, head.isLoading, cps.isLoading])
 }
