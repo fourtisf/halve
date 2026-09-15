@@ -132,11 +132,66 @@ const web = `${BASE}
   <div class="mono foot" style="left:0;right:0;bottom:40px;text-align:center;font-size:14px">halve.finance · @Halvefinance</div>
 </div>`
 
+
+/**
+ * Threads / Instagram posts. Threads has no cover image: the profile picture is the avatar in
+ * public/brand, and posts carry the visuals. 4:5 (1080×1350) gets the most feed space; 1:1 for reuse.
+ */
+const card = (w, h, kicker, body) => `${BASE}
+<div class="frame" style="width:${w}px;height:${h}px;display:flex;flex-direction:column;padding:72px 80px 64px">
+  <div class="glow" style="left:-200px;top:-320px;width:1200px;height:960px;background:radial-gradient(closest-side,rgba(232,193,112,.11),transparent)"></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;position:relative">
+    <div class="lockup" style="position:static;font-size:26px">${MARK(32)}Halve</div>
+    <div class="mono" style="font-size:15px;color:var(--fg3)">${kicker}</div>
+  </div>
+  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;position:relative;min-height:0">${body}</div>
+  <div class="mono" style="display:flex;justify-content:space-between;font-size:15px;color:var(--fg3);position:relative"><span>halve.finance · @Halvefinance</span><span>Live on Robinhood Chain</span></div>
+</div>`
+
+const step = (n, t, d, s) => `<div style="display:flex;gap:${22 * s}px;padding:${22 * s}px 0;border-top:1px solid var(--line)">
+  <div class="mono" style="color:var(--yt);font-size:${15 * s}px;padding-top:${6 * s}px;width:${34 * s}px;flex-shrink:0">${n}</div>
+  <div><div style="font-size:${26 * s}px;font-weight:500;letter-spacing:-.02em">${t}</div><div style="font-size:${19 * s}px;color:var(--fg2);margin-top:${6 * s}px;line-height:1.5">${d}</div></div>
+</div>`
+
+const way = (cls, k, t, d, s) => `<div class="chip ${cls}" style="padding:${30 * s}px ${34 * s}px;gap:${8 * s}px;align-items:flex-start;border-radius:${22 * s}px">
+  <small style="font-size:${14 * s}px">${k}</small>
+  <b style="font-size:${34 * s}px">${t}</b>
+  <div style="font-size:${19 * s}px;color:var(--fg2);line-height:1.5;margin-top:${4 * s}px">${d}</div>
+</div>`
+
+const handle = (label, s) => `<div class="btn btn-line mono" style="height:${54 * s}px;padding:0 ${22 * s}px;font-size:${18 * s}px;border-radius:${14 * s}px">${label}</div>`
+
+function threadsBody(variant, s) {
+  const eyebrow = (txt, gold = false) => `<div class="eyebrow" style="font-size:${15 * s}px;padding:${8 * s}px ${15 * s}px;align-self:flex-start"><i${gold ? ' class="y"' : ''}></i>${txt}</div>`
+  const h1 = (txt, size) => `<h1 style="font-size:${size * s}px;margin:${26 * s}px 0 ${22 * s}px">${txt}</h1>`
+  const p = (txt) => `<p style="font-size:${24 * s}px;max-width:${820 * s}px">${txt}</p>`
+  switch (variant) {
+    case 'intro':
+      return `${eyebrow('Live on Robinhood Chain')}${h1('Lock in a fixed yield on your stock tokens. Or buy the dividends outright.', 74)}${p('Halve splits a tokenized stock or ETF into two things you can own separately: the share at a discount, and every dividend it pays until a fixed date.')}<div style="margin-top:${52 * s}px">${splitVisual(1.15 * s)}</div>`
+    case 'how':
+      return `${eyebrow('How it works')}${h1('One share in.<br>Two tokens out.', 84)}<div style="margin-top:${18 * s}px;border-bottom:1px solid var(--line)">${step('01', 'Split', 'Deposit a stock token. You get a principal token (PT) and a yield token (YT), one each per share. Fee 0.10 %.', s)}${step('02', 'Hold or trade', 'PT is the share at a discount, YT is the dividend stream. Keep both, or sell the half you don’t want.', s)}${step('03', 'Merge or redeem', 'Merge PT + YT back into the share any time, free. Or wait for maturity: PT redeems the share, YT the dividends.', s)}</div>`
+    case 'ways':
+      return `${eyebrow('Two ways to use it')}${h1('Pick the half you want.', 84)}<div style="display:flex;flex-direction:column;gap:${18 * s}px;margin-top:${16 * s}px">${way('', 'principal · PT', 'The share at a discount.', 'Buy PT below one share, hold to maturity, redeem one full share. The discount is your fixed yield, known the day you buy.', s)}${way('y', 'yield · YT', 'Every dividend, nothing else.', 'A small ticket for the whole payout stream until maturity. If the payouts come in higher than the market expects, YT reprices first.', s)}</div>`
+    case 'official':
+      return `${eyebrow('Official accounts', true)}${h1('Nothing is real until you read it here.', 84)}${p('Series launches, contract addresses and the $HALVE contract address are posted on our official accounts first. Anyone else sending you a contract address is not us.')}<div style="display:flex;flex-wrap:wrap;gap:${12 * s}px;margin-top:${40 * s}px">${handle('halve.finance', s)}${handle('X · @Halvefinance', s)}${handle('Threads · @Halvefinance', s)}</div>`
+    default:
+      throw new Error(variant)
+  }
+}
+const threadsJob = (variant, n) => [
+  { name: `halve-threads-0${n}-${variant}-1080x1350.png`, html: card(1080, 1350, `0${n} / 04`, threadsBody(variant, 1)), w: 1080, h: 1350, scale: 1 },
+  { name: `halve-threads-0${n}-${variant}-1080x1080.png`, html: card(1080, 1080, `0${n} / 04`, threadsBody(variant, 0.84)), w: 1080, h: 1080, scale: 1 },
+]
+
 const jobs = [
   { name: 'halve-x-header-premium-1500x500.png', html: header, w: 1500, h: 500, scale: 1 },
   { name: 'halve-x-header-premium-3000x1000.png', html: header, w: 1500, h: 500, scale: 2 },
   { name: 'halve-x-post-follow-1600x900.png', html: follow, w: 1600, h: 900, scale: 1 },
   { name: 'halve-x-post-hero-1600x900.png', html: web, w: 1600, h: 900, scale: 1 },
+  ...threadsJob('intro', 1),
+  ...threadsJob('how', 2),
+  ...threadsJob('ways', 3),
+  ...threadsJob('official', 4),
 ]
 
 const browser = await chromium.launch()
