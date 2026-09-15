@@ -212,9 +212,48 @@ function threadsBody(variant, s) {
       throw new Error(variant)
   }
 }
+
+/** Threads landscape (16:9, 1920×1080): same four designs as a wide banner, text left, panel right. */
+const wideCard = (kicker, left, right) => `${BASE}
+<div class="frame" style="width:1920px;height:1080px;display:flex;flex-direction:column;padding:72px 96px 60px">
+  <div class="glow" style="left:-300px;top:-420px;width:1300px;height:1100px;background:radial-gradient(closest-side,rgba(232,193,112,.13),transparent 70%)"></div>
+  <div class="glow" style="right:-260px;bottom:-460px;width:1100px;height:1000px;background:radial-gradient(closest-side,rgba(232,193,112,.12),transparent 70%)"></div>
+  <div class="dots" style="--mx:68%;--my:50%"></div>
+  <div class="sweep"></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;position:relative;padding-bottom:26px;border-bottom:1px solid rgba(255,255,255,.09)">
+    <div class="lockup" style="position:static;font-size:26px">${MARK(32)}Halve</div>
+    <div class="mono" style="font-size:13px;letter-spacing:.18em;color:var(--fg3)">${kicker}</div>
+  </div>
+  <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:96px;align-items:center;position:relative;min-height:0">
+    <div>${left}</div>
+    <div>${right}</div>
+  </div>
+  <div class="mono" style="display:flex;justify-content:space-between;font-size:12.5px;letter-spacing:.14em;color:var(--fg3);position:relative;padding-top:24px;border-top:1px solid rgba(255,255,255,.09)"><span>HALVE.FINANCE · @HALVEFINANCE</span><span>ROBINHOOD CHAIN · 4663</span></div>
+  ${GRAIN}
+</div>`
+
+function threadsWide(variant) {
+  const kicker = (txt) => `<div class="kicker">${txt}</div>`
+  const h1 = (txt, size = 76) => `<h1 style="font-size:${size}px;margin:22px 0 20px">${txt}</h1>`
+  const p = (txt) => `<p style="font-size:24px;max-width:760px;color:#9A9A9A">${txt}</p>`
+  switch (variant) {
+    case 'intro':
+      return wideCard('01 / 04', `${kicker('Fixed yield · Dividend tokens · Robinhood Chain')}${h1('Lock in a fixed yield on your stock tokens. Or buy the dividends outright.', 72)}${p('Halve splits a tokenized stock or ETF into two things you can own separately: the share at a discount, and every dividend it pays until a fixed date.')}`, ticket(1.12))
+    case 'how':
+      return wideCard('02 / 04', `${kicker('How it works')}${h1('One share in.<br>Two tokens out.', 92)}${p('Three steps, no claim button, nothing to manage in between.')}`, `<div class="glass" style="padding:10px 34px;border-radius:24px">${step('01', 'Split', 'Deposit a stock token. You get a principal token (PT) and a yield token (YT), one each per share. Fee 0.10 %.', 1)}${step('02', 'Hold or trade', 'PT is the share at a discount, YT is the dividend stream. Keep both, or sell the half you don’t want.', 1)}${step('03', 'Merge or redeem', 'Merge PT + YT back into the share any time, free. Or wait for maturity: PT redeems the share, YT the dividends.', 1, true)}</div>`)
+    case 'ways':
+      return wideCard('03 / 04', `${kicker('Two ways to use it')}${h1('Pick the half you want.', 92)}${p('Splitting gives you both tokens. Keep the one you want and sell the other on Robinhood Chain.')}`, `<div style="display:flex;flex-direction:column;gap:20px">${way(false, 'PRINCIPAL TOKEN', 'The share at a discount.', 'Buy PT below one share, hold to maturity, redeem one full share. The discount is your fixed yield, known the day you buy.', 1)}${way(true, 'YIELD TOKEN', 'Every dividend, nothing else.', 'A small ticket for the whole payout stream until maturity. If the payouts come in higher than the market expects, YT reprices first.', 1)}</div>`)
+    case 'official':
+      return wideCard('04 / 04', `${kicker('Official accounts')}${h1('Nothing is real until you read it here.', 84)}${p('Series launches, contract addresses and the $HALVE contract address are posted on our official accounts first. Anyone else sending you a contract address is not us.')}`, `<div class="glass" style="padding:8px 34px;border-radius:24px">${acct('↗', 'WEBSITE', 'halve.finance', 1.1)}${acct(XGLYPH(18), 'X', '@Halvefinance', 1.1)}${acct('@', 'THREADS', '@Halvefinance', 1.1)}${acct(`<i style="width:9px;height:9px;border-radius:50%;background:var(--yt);box-shadow:0 0 10px var(--yt);display:inline-block"></i>`, '$HALVE CA', `<span style="color:var(--yt)">not published yet</span>`, 1.1, true)}</div>`)
+    default:
+      throw new Error(variant)
+  }
+}
+
 const threadsJob = (variant, n) => [
   { name: `halve-threads-0${n}-${variant}-1080x1350.png`, html: card(1080, 1350, `0${n} / 04`, threadsBody(variant, 1), 1), w: 1080, h: 1350, scale: 1 },
   { name: `halve-threads-0${n}-${variant}-1080x1080.png`, html: card(1080, 1080, `0${n} / 04`, threadsBody(variant, 0.82), 0.82), w: 1080, h: 1080, scale: 1 },
+  { name: `halve-threads-0${n}-${variant}-1920x1080.png`, html: threadsWide(variant), w: 1920, h: 1080, scale: 1 },
 ]
 
 
