@@ -15,10 +15,11 @@
  * (see `cast wallet import`) or WALLET_ARGS="--ledger". Never paste a key anywhere else.
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createPublicClient, formatEther, http, isAddress, parseAbi } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
+import { resolveStock, setEnvValue } from './lib/find-stock.mjs'
 
 const root = resolve(new URL('..', import.meta.url).pathname)
 const contracts = resolve(root, 'contracts')
@@ -36,7 +37,8 @@ if (existsSync(envFile)) {
 const need = (k) => { if (!env[k]) { console.error(`missing ${k} (set it in .env.mainnet)`); process.exit(2) } return env[k] }
 const RPC = env.RPC_URL ?? 'https://rpc.mainnet.chain.robinhood.com'
 const CHAIN_ID = Number(env.CHAIN_ID ?? 4663)
-const STOCK = need('STOCK'); const TICKER = need('TICKER'); const MATURITY = need('MATURITY'); const CAP = need('CAP')
+const TICKER = need('TICKER'); const MATURITY = need('MATURITY'); const CAP = need('CAP')
+let STOCK = env.STOCK ?? ''
 const TREASURY = need('TREASURY'); const GUARDIAN = need('GUARDIAN'); const OWNER = need('OWNER')
 const PRICE_FEED = env.PRICE_FEED ?? ''
 const NPM = env.NPM ?? ''
@@ -55,6 +57,16 @@ const ok = (l, v) => console.log(`  ✓ ${l}${v !== undefined ? `  → ${v}` : '
 const bad = (l, e) => { failures++; console.log(`  ✗ ${l}  → ${e?.shortMessage ?? e?.message ?? e}`) }
 
 console.log(`\nPreflight on ${RPC}${dryRun ? ' (dry run)' : ''}`)
+// STOCK empty or a placeholder → look the token up by ticker (Robinhood registry, then Blockscout), verify it on-chain, pin it
+if (!isAddress(STOCK)) {
+  console.log(`  · STOCK is ${STOCK ? `not an address ("${STOCK}")` : 'empty'}; resolving ${TICKER} by ticker`)
+  const r = await resolveStock(TICKER, RPC, (m) => console.log(`    ${m}`))
+  if (r.ok) {
+    STOCK = r.address
+    if (existsSync(envFile)) writeFileSync(envFile, setEnvValue(readFileSync(envFile, 'utf8'), 'STOCK', STOCK))
+    ok(`STOCK resolved for ${TICKER}`, `${STOCK} (symbol ${r.symbol}, uiMultiplier ${formatEther(r.multiplier)}, via ${r.source}; pinned in .env.mainnet)`)
+  } else bad('STOCK', `${r.reason}. Set STOCK=0x… in .env.mainnet yourself (docs.robinhood.com/chain/contracts).`)
+}
 // addresses first, so a placeholder left in .env.mainnet is named instead of surfacing as an RPC error
 for (const [k, v, optional] of [['STOCK', STOCK], ['TREASURY', TREASURY], ['GUARDIAN', GUARDIAN], ['OWNER', OWNER], ['PRICE_FEED', PRICE_FEED, true], ['NPM', NPM, true], ['ACCOUNTANT', env.ACCOUNTANT ?? '', true]]) {
   if (optional && !v) continue

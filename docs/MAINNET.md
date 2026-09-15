@@ -17,7 +17,7 @@ pools need no wrapper. The tokens are freely transferable and usable by contract
 
 | Input | Where it comes from |
 |---|---|
-| `STOCK` | The ERC-8056 stock token address on Robinhood Chain (must answer `uiMultiplier()`; the preflight checks). |
+| `STOCK` | Optional. Leave empty and the deployer resolves it from `TICKER` (Robinhood's asset registry, then Blockscout), verifies `symbol()` and `uiMultiplier()` on-chain and pins it in `.env.mainnet`. `node scripts/find-stock.mjs JEPI` does the lookup on its own. |
 | `PRICE_FEED` | Chainlink stock/USD feed on chain 4663 (optional; USD values show $0 without it). |
 | `NPM` | Uniswap v3 `NonfungiblePositionManager` on Robinhood Chain: `0x73991a25c818bf1f1128deaab1492d45638de0d3`. Leave empty to deploy the series without pools. |
 | `TREASURY`, `GUARDIAN`, `OWNER` | Your addresses. Use a multisig for treasury and owner; the guardian must be able to act within days. |
@@ -59,7 +59,7 @@ node scripts/mainnet.mjs             # deploys, creates pools, updates series.js
 
 What the command does, in order:
 
-1. **Preflight**: chain id 4663, deployer balance, `STOCK.uiMultiplier()`, `PRICE_FEED.latestRoundData()`, code at `NPM`, `MATURITY` in the future, enough stock for seeding.
+1. **Preflight**: `STOCK` resolved from the ticker when empty, chain id 4663, deployer balance, `STOCK.uiMultiplier()`, `PRICE_FEED.latestRoundData()`, code at `NPM`, `MATURITY` in the future, enough stock for seeding.
 2. **`DeploySeries.s.sol`**: `MultiplierAccountant` (or reuse `ACCOUNTANT`) and `StripVault` with its `pJEPI` / `yJEPI` tokens. Verified on Blockscout when `VERIFY=1`.
 3. **`CreatePools.s.sol`**: PT/stock and YT/stock pools at `PT_PRICE` / `YT_PRICE`, fee tier `FEE`. With `SEED_AMOUNT`, `SeedPools` first splits that much stock (PT + YT), then seeds both pools full-range with stock as the quote.
 4. **`scripts/apply-deployment.mjs`** writes every address plus `maturity`, `cap`, `deployBlock` into `src/contracts/series.json`.
