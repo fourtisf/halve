@@ -20,13 +20,25 @@ still works in the app but is not recommended on Uniswap v3.
 |---|---|
 | `STOCK` | The ERC-8056 stock token address on Robinhood Chain (must answer `uiMultiplier()`; the preflight checks). |
 | `PRICE_FEED` | Chainlink stock/USD feed on chain 4663 (optional; USD values show $0 without it). |
-| `NPM` | Uniswap v3 `NonfungiblePositionManager` on Robinhood Chain. Leave empty to deploy the series without pools. |
+| `NPM` | Uniswap v3 `NonfungiblePositionManager` on Robinhood Chain: `0x73991a25c818bf1f1128deaab1492d45638de0d3`. Leave empty to deploy the series without pools. |
 | `TREASURY`, `GUARDIAN`, `OWNER` | Your addresses. Use a multisig for treasury and owner; the guardian must be able to act within days. |
 | `MATURITY`, `CAP`, `TICKER` | Series parameters; `TICKER` must match an entry in `src/contracts/series.json`. |
 | Deployer | A wallet with ETH for gas, and 2 × `SEED_AMOUNT` of the stock token if you seed liquidity. |
 
 Do a full rehearsal on the Robinhood Chain testnet (chain id 46630) first with the same file and
 `RPC_URL` / `CHAIN_ID` changed.
+
+## Uniswap v3 on Robinhood Chain (chain id 4663)
+
+Official deployment, as published in `@uniswap/sdk-core` (`ROBINHOOD_ADDRESSES`):
+
+| Contract | Address |
+|---|---|
+| UniswapV3Factory | `0x1f7d7550b1b028f7571e69a784071f0205fd2efa` |
+| NonfungiblePositionManager | `0x73991a25c818bf1f1128deaab1492d45638de0d3` |
+| SwapRouter02 | `0xcaf681a66d020601342297493863e78c959e5cb2` |
+| QuoterV2 | `0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7` |
+| TickLens | `0x7dfd4f31be6814d2906bde155c3e1b146eac1468` |
 
 ## Steps
 
