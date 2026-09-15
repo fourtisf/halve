@@ -23,8 +23,9 @@ describe('poolPrice', () => {
 })
 
 describe('derived series maths (CLAUDE.md formulas)', () => {
-  it('fixedApy = (1/ptPrice)^(1/years) − 1', () => {
-    expect(fixedApy(1 - 0.0413, 0.53)).toBeCloseTo(0.0828, 3) // JEPI in the prototype
+  it('fixedApy = (principalPerPT/ptPrice)^(1/years) − 1', () => {
+    expect(fixedApy(1 - 0.0413, 0.53)).toBeCloseTo(0.0828, 3) // JEPI in the prototype, nothing accrued yet
+    expect(fixedApy(0.9, 1, 0.05)).toBeCloseTo(1 / 1.05 / 0.9 - 1, 9) // the PT only redeems d0/D raw tokens
   })
   it('leverage = 1/ytPrice', () => {
     expect(leverage(0.0413)).toBeCloseTo(24.2, 1)

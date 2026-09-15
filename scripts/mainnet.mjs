@@ -3,10 +3,9 @@
  * Mainnet (or testnet) deployment of one Halve series, end to end, run on the machine that holds the key:
  *   1. preflight: chain id, deployer balance, the stock token answers uiMultiplier(), the price feed answers
  *   2. DeploySeries.s.sol            → accountant + vault + PT/YT           (deployments/<TICKER>.series.json)
- *   3. DeployWrappedStock.s.sol      → wStock, the non-rebasing quote asset (unless WSTOCK is given or QUOTE_KIND=stock)
- *   4. CreatePools.s.sol[:SeedPools] → Uniswap v3 PT/wStock + YT/wStock pools, seeded when SEED_AMOUNT is set
- *   5. scripts/apply-deployment.mjs  → src/contracts/series.json
- *   6. pnpm check:live
+ *   3. CreatePools.s.sol[:SeedPools] → Uniswap v3 PT/stock + YT/stock pools, seeded when SEED_AMOUNT is set
+ *   4. scripts/apply-deployment.mjs  → src/contracts/series.json
+ *   5. pnpm check:live
  *
  *   cp .env.mainnet.example .env.mainnet   # fill it in (never commit it)
  *   node scripts/mainnet.mjs --dry-run     # simulate every step, broadcast nothing
@@ -16,7 +15,7 @@
  * (see `cast wallet import`) or WALLET_ARGS="--ledger". Never paste a key anywhere else.
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createPublicClient, formatEther, http, isAddress, parseAbi } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
@@ -41,7 +40,6 @@ const STOCK = need('STOCK'); const TICKER = need('TICKER'); const MATURITY = nee
 const TREASURY = need('TREASURY'); const GUARDIAN = need('GUARDIAN'); const OWNER = need('OWNER')
 const PRICE_FEED = env.PRICE_FEED ?? ''
 const NPM = env.NPM ?? ''
-const QUOTE_KIND = env.QUOTE_KIND ?? 'wrapped'
 const VERIFY = env.VERIFY === '1' || env.VERIFY === 'true'
 const walletArgs = env.DEPLOYER_KEY ? ['--private-key', env.DEPLOYER_KEY] : env.WALLET_ARGS ? env.WALLET_ARGS.split(/\s+/) : null
 if (!walletArgs) { console.error('set DEPLOYER_KEY or WALLET_ARGS in .env.mainnet'); process.exit(2) }
@@ -58,7 +56,7 @@ const bad = (l, e) => { failures++; console.log(`  ✗ ${l}  → ${e?.shortMessa
 
 console.log(`\nPreflight on ${RPC}${dryRun ? ' (dry run)' : ''}`)
 // addresses first, so a placeholder left in .env.mainnet is named instead of surfacing as an RPC error
-for (const [k, v, optional] of [['STOCK', STOCK], ['TREASURY', TREASURY], ['GUARDIAN', GUARDIAN], ['OWNER', OWNER], ['PRICE_FEED', PRICE_FEED, true], ['NPM', NPM, true], ['WSTOCK', env.WSTOCK ?? '', true], ['ACCOUNTANT', env.ACCOUNTANT ?? '', true]]) {
+for (const [k, v, optional] of [['STOCK', STOCK], ['TREASURY', TREASURY], ['GUARDIAN', GUARDIAN], ['OWNER', OWNER], ['PRICE_FEED', PRICE_FEED, true], ['NPM', NPM, true], ['ACCOUNTANT', env.ACCOUNTANT ?? '', true]]) {
   if (optional && !v) continue
   if (isAddress(v)) ok(`${k} is an address`, v); else bad(k, `not a valid address: "${v}" (edit .env.mainnet)`)
 }
@@ -108,36 +106,23 @@ function forge(target, extraEnv, verify = false) {
   if (r.status !== 0) { console.error(`\n${target} failed`); process.exit(r.status ?? 1) }
 }
 
-console.log('\n1/4 series (accountant + vault + PT/YT)')
+console.log('\n1/3 series (accountant + vault + PT/YT)')
 forge('script/DeploySeries.s.sol', { STOCK, TICKER, MATURITY, CAP, TREASURY, GUARDIAN, OWNER, PRICE_FEED: PRICE_FEED || '0x0000000000000000000000000000000000000000', ACCOUNTANT: env.ACCOUNTANT ?? '', OUT: out('series') }, VERIFY)
 const series = dryRun ? null : JSON.parse(readFileSync(out('series'), 'utf8'))
 
-let wstock = env.WSTOCK ?? ''
-if (QUOTE_KIND === 'wrapped' && !wstock) {
-  console.log('\n2/4 wrapped stock (quote asset)')
-  forge('script/DeployWrappedStock.s.sol', { STOCK, OUT: out('wrapped') }, VERIFY)
-  if (!dryRun) wstock = JSON.parse(readFileSync(out('wrapped'), 'utf8')).wrappedStock
-} else console.log(`\n2/4 quote asset: ${QUOTE_KIND === 'wrapped' ? `existing wStock ${wstock}` : 'the stock token itself (not recommended on Uniswap v3)'}`)
-
 const files = [out('series')]
 if (NPM && !dryRun) {
-  console.log('\n3/4 pools')
-  const quote = QUOTE_KIND === 'wrapped' ? wstock : STOCK
-  const poolEnv = { NPM, VAULT: series.vault, QUOTE: quote, QUOTE_KIND, FEE: env.FEE ?? '3000', PT_PRICE: env.PT_PRICE ?? '960000000000000000', YT_PRICE: env.YT_PRICE ?? '40000000000000000', OUT: out('pools') }
-  if (env.SEED_AMOUNT && QUOTE_KIND === 'wrapped') forge('script/CreatePools.s.sol:SeedPools', { ...poolEnv, WSTOCK: wstock, AMOUNT: env.SEED_AMOUNT })
+  console.log('\n2/3 pools (quoted in the stock token: raw balances never rebase, so Uniswap v3 is fine with it)')
+  const poolEnv = { NPM, VAULT: series.vault, QUOTE: STOCK, FEE: env.FEE ?? '3000', PT_PRICE: env.PT_PRICE ?? '960000000000000000', YT_PRICE: env.YT_PRICE ?? '40000000000000000', OUT: out('pools') }
+  if (env.SEED_AMOUNT) forge('script/CreatePools.s.sol:SeedPools', { ...poolEnv, AMOUNT: env.SEED_AMOUNT })
   else forge('script/CreatePools.s.sol', poolEnv)
   files.push(out('pools'))
-} else if (NPM) console.log('\n3/4 pools: skipped in dry run (needs the deployed vault)')
+} else if (NPM) console.log('\n2/3 pools: skipped in dry run (needs the deployed vault)')
 
 if (!dryRun) {
-  console.log('\n4/4 series.json + preflight of the app reads')
+  console.log('\n3/3 series.json + preflight of the app reads')
   const apply = spawnSync(process.execPath, [resolve(root, 'scripts/apply-deployment.mjs'), '--ticker', TICKER, ...(env.SERIES_ID ? ['--id', env.SERIES_ID] : []), ...files], { stdio: 'inherit' })
   if (apply.status !== 0) process.exit(apply.status ?? 1)
-  if (QUOTE_KIND === 'wrapped' && wstock) {
-    const patch = resolve(outDir, `${TICKER}.quote.json`)
-    writeFileSync(patch, JSON.stringify({ quote: 'wrapped', quoteToken: wstock }))
-    spawnSync(process.execPath, [resolve(root, 'scripts/apply-deployment.mjs'), '--ticker', TICKER, ...(env.SERIES_ID ? ['--id', env.SERIES_ID] : []), patch], { stdio: 'inherit' })
-  }
   const check = spawnSync(process.execPath, [resolve(root, 'scripts/check-live.mjs')], { stdio: 'inherit', env: { ...process.env, NEXT_PUBLIC_RPC_URL: RPC } })
   console.log(check.status === 0
     ? '\nDone. Commit src/contracts/series.json, then on the server: MOCK=false in .env.local, pnpm build, pm2 restart halve.'

@@ -17,6 +17,7 @@ export type SeriesStats = {
   dividendIndex: number // 1.0 = 1e18
   d0: number
   accrued: number // dividendIndex / d0 − 1
+  uiMultiplier: number // ERC-8056 display multiplier: shares per raw token (1.0 = 1e18)
   splitFactor: number
   isSynced: boolean
   events: number // classified checkpoints this term

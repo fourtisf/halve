@@ -37,10 +37,6 @@ export function statsContracts(s: Series): ContractFunctionParameters[] {
   ]
 }
 
-/** Stock UI units per pool quote unit: 1 for pools quoted in the stock, uiMultiplier for pools quoted in wStock. */
-export function quoteToStock(s: Series, uiMultiplier: bigint | undefined): number {
-  return s.quote === 'wrapped' && uiMultiplier !== undefined && uiMultiplier > 0n ? wadToNumber(uiMultiplier) : 1
-}
 
 export type Slot0 = readonly [bigint, number, number, number, number, number, boolean]
 export type Round = readonly [bigint, bigint, bigint, bigint, bigint]
@@ -66,11 +62,12 @@ export function parseStats(s: Series, data: readonly ReadResult[] | undefined, b
   const ytDec = Number(ok<number>(data, base + 14) ?? stockDec)
   const round = ok<Round>(data, base + 15)
   const feedDec = Number(ok<number>(data, base + 16) ?? 8)
-  const q = quoteToStock(s, ok<bigint>(data, base + 17))
+  const uiMultiplier = ok<bigint>(data, base + 17)
+  const accrued = dividendIndex !== undefined && d0 !== undefined ? accruedFrom(dividendIndex, d0) : 0
 
-  // pool prices are in quote units (stock, or wStock shares); the app shows everything in stock UI units
-  const ptPrice = slotPT && token0PT ? poolPrice(slotPT[0], token0PT.toLowerCase() === s.pt.toLowerCase(), ptDec, stockDec) * q : 0
-  const ytPrice = slotYT && token0YT ? poolPrice(slotYT[0], token0YT.toLowerCase() === s.yt.toLowerCase(), ytDec, stockDec) * q : 0
+  // pool prices are raw stock tokens per PT / YT; raw balances never rebase (ERC-8056), only the display multiplier
+  const ptPrice = slotPT && token0PT ? poolPrice(slotPT[0], token0PT.toLowerCase() === s.pt.toLowerCase(), ptDec, stockDec) : 0
+  const ytPrice = slotYT && token0YT ? poolPrice(slotYT[0], token0YT.toLowerCase() === s.yt.toLowerCase(), ytDec, stockDec) : 0
   const years = yearsToMaturity(s.maturity, now)
   // Chainlink prices the token with the multiplier inside — do NOT multiply by uiMultiplier again.
   const usdPrice = round ? Number(round[1]) / 10 ** feedDec : 0
@@ -81,7 +78,7 @@ export function parseStats(s: Series, data: readonly ReadResult[] | undefined, b
     ready: !!(slotPT && slotYT),
     ptPrice,
     ytPrice,
-    fixedApy: fixedApy(ptPrice, years),
+    fixedApy: fixedApy(ptPrice, years, accrued),
     leverage: leverage(ytPrice),
     divYield: impliedDividendYield(ytPrice, years),
     yearsToMaturity: years,
@@ -92,7 +89,8 @@ export function parseStats(s: Series, data: readonly ReadResult[] | undefined, b
     tvlUsd,
     dividendIndex: dividendIndex !== undefined ? wadToNumber(dividendIndex) : 1,
     d0: d0 !== undefined ? wadToNumber(d0) : 1,
-    accrued: dividendIndex !== undefined && d0 !== undefined ? accruedFrom(dividendIndex, d0) : 0,
+    accrued,
+    uiMultiplier: uiMultiplier !== undefined ? wadToNumber(uiMultiplier) : 1,
     splitFactor: splitFactor !== undefined ? wadToNumber(splitFactor) : 1,
     isSynced,
     events,

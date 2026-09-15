@@ -1,16 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { quoteRedeemPT, quoteRedeemYT } from './redeem'
+import { quoteRedeemPT, quoteRedeemYT, ytClaim } from './redeem'
 
-describe('redeem quotes', () => {
-  it('PT redeems one share each, no fee', () => {
-    expect(quoteRedeemPT(2.5)).toEqual({ out: 2.5, fee: 0 })
+describe('redeem quotes (raw stock units)', () => {
+  it('PT redeems its share count: raw × d0 / dm', () => {
+    expect(quoteRedeemPT(100, 0).out).toBe(100)
+    expect(quoteRedeemPT(100, 0.0201).out).toBeCloseTo(100 / 1.0201, 9)
+    expect(quoteRedeemPT(100, 0.0201).fee).toBe(0)
   })
-  it('YT redeems accrued dividends less the 5% fee', () => {
-    const q = quoteRedeemYT(100, 0.026255)
-    expect(q.fee).toBeCloseTo(0.131275, 9)
-    expect(q.out).toBeCloseTo(2.494225, 9)
+  it('YT redeems the reinvested dividends less the 5% fee, and PT + YT + fee is the raw deposit', () => {
+    const pt = quoteRedeemPT(100, 0.0201)
+    const yt = quoteRedeemYT(100, 0.0201)
+    expect(ytClaim(100, 0.0201)).toBeCloseTo(100 - 100 / 1.0201, 9)
+    expect(yt.fee).toBeCloseTo(ytClaim(100, 0.0201) * 0.05, 9)
+    expect(pt.out + yt.out + yt.fee).toBeCloseTo(100, 9)
   })
-  it('never negative', () => {
-    expect(quoteRedeemYT(10, -0.5)).toEqual({ out: 0, fee: 0 })
+  it('never quotes a negative payout', () => {
+    expect(quoteRedeemYT(100, -0.01).out).toBe(0)
+    expect(quoteRedeemPT(100, -0.01).out).toBe(100)
   })
 })

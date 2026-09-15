@@ -131,13 +131,13 @@ test.describe.serial('live chain', () => {
     await expect(row).toContainText('Dividend')
     await expect(row).toContainText('1.00650')
     await expect(row).toContainText('Classified')
-    // 5.99 yJEPI × 0.65 % × $57.10 ≈ $2.22
-    await expect(page.locator('#pos')).toContainText('$2.22')
-    // merging now pays the grown share: 1 base unit → 1.0065 stock
+    // 5.99 yJEPI × (1 − 1/1.0065) × $57.10 ≈ $2.21: the YT's slice of the raw token
+    await expect(page.locator('#pos')).toContainText('$2.21')
+    // merging pays raw tokens 1:1; raw balances never rebase, the wallet shows 1.0065 shares per token
     await page.click('#tMerge')
     await page.fill('#amt', '1')
     await page.click('#go')
     await expect(page.locator('#toast')).toHaveText(/Merged into 1 /, { timeout: 30_000 })
-    expect(await pub.readContract({ address: SERIES.underlying, abi: stockAbi, functionName: 'balanceOf', args: [USER] })).toBe((parseEther('994') * 10065n) / 10000n + parseEther('1.0065'))
+    expect(await pub.readContract({ address: SERIES.underlying, abi: stockAbi, functionName: 'balanceOf', args: [USER] })).toBe(parseEther('995'))
   })
 })

@@ -30,7 +30,6 @@ const abi = parseAbi([
   'function symbol() view returns (string)',
   'function latestRoundData() view returns (uint80, int256 answer, uint256, uint256, uint80)',
   'function uiMultiplier() view returns (uint256)',
-  'function stock() view returns (address)',
 ])
 
 const client = createPublicClient({ transport: http(RPC) })
@@ -74,13 +73,7 @@ for (const s of series) {
   await call('underlying.symbol', s.underlying, 'symbol')
   await call('underlying.decimals', s.underlying, 'decimals')
   await call('underlying.uiMultiplier (ERC-8056)', s.underlying, 'uiMultiplier')
-  const quote = s.quote === 'wrapped' && s.quoteToken ? s.quoteToken : s.underlying
-  if (s.quote === 'wrapped') {
-    if (await hasCode('quoteToken (wStock) has code', quote)) {
-      const inner = await call('quoteToken.stock', quote, 'stock')
-      if (inner && inner.toLowerCase() !== s.underlying.toLowerCase()) bad('quoteToken.stock', `wraps ${inner}, not the series underlying`)
-    }
-  }
+  const quote = s.underlying
   await call('vault.totalDeposits', s.vault, 'totalDeposits')
   await call('vault.cap', s.vault, 'cap')
   await call('vault.d0', s.vault, 'd0')
@@ -95,7 +88,7 @@ for (const s of series) {
     const t1 = await call(`${k}.token1`, s[k], 'token1')
     const pair = [t0, t1].map((a) => a?.toLowerCase())
     if (t0 && t1) {
-      if (pair.includes(tok.toLowerCase()) && pair.includes(quote.toLowerCase())) ok(`${k} pairs ${k === 'poolPT' ? 'PT' : 'YT'} with the ${s.quote === 'wrapped' ? 'wrapped stock' : 'stock'}`)
+      if (pair.includes(tok.toLowerCase()) && pair.includes(quote.toLowerCase())) ok(`${k} pairs ${k === 'poolPT' ? 'PT' : 'YT'} with the stock`)
       else bad(`${k} pair`, `pool tokens ${t0}/${t1} are not ${tok} + ${quote}`)
     }
     await call(`${k}.slot0`, s[k], 'slot0')

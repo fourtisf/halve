@@ -74,6 +74,7 @@ export function mockStats(series: Series): SeriesStats {
     dividendIndex: Math.pow(1 + per, m.ev),
     d0: 1,
     accrued: (m.dy * m.ev) / 12,
+    uiMultiplier: Math.pow(1 + per, m.ev),
     splitFactor: 1,
     isSynced: m.t !== MOCK_HELD_TICKER,
     events: m.ev,

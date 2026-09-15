@@ -6,9 +6,15 @@ export const YEAR_SECONDS = 365.25 * 24 * 3600
 export const yearsToMaturity = (maturity: number, now = Date.now() / 1000): number =>
   Math.max((maturity - now) / YEAR_SECONDS, 1 / 365.25)
 
-/** fixedApy = (1/ptPrice)^(1/yearsToMaturity) − 1 */
-export const fixedApy = (ptPrice: number, years: number): number =>
-  ptPrice > 0 ? Math.pow(1 / ptPrice, 1 / years) - 1 : 0
+/**
+ * Raw stock tokens one PT redeems for: d0 / dividendIndex = 1 / (1 + accrued). The stock token's raw balance never
+ * changes (ERC-8056: only the display multiplier moves), so the reinvested dividends are carved out of the raw unit.
+ */
+export const principalPerPT = (accrued: number): number => 1 / (1 + Math.max(0, accrued))
+
+/** fixedApy = (principalPerPT / ptPrice)^(1/yearsToMaturity) − 1: the PT's discount to its share count, annualised. */
+export const fixedApy = (ptPrice: number, years: number, accrued = 0): number =>
+  ptPrice > 0 ? Math.pow(principalPerPT(accrued) / ptPrice, 1 / years) - 1 : 0
 
 /** leverage = 1/ytPrice */
 export const leverage = (ytPrice: number): number => (ytPrice > 0 ? 1 / ytPrice : 0)

@@ -1,15 +1,16 @@
-/** Redemption quotes after maturity. Pure, unit-tested. Assumptions are documented in README. */
+/** Redemption quotes after maturity, in raw stock tokens. Pure, unit-tested. */
 import { YIELD_REDEMPTION_FEE } from '@/contracts/constants'
+import { principalPerPT } from './math'
 
-/** redeemPT(amount): 1 PT → 1 share of the stock. */
-export const quoteRedeemPT = (amount: number): { out: number; fee: number } => ({ out: amount, fee: 0 })
+/** redeemPT(amount): amount × d0 / dm raw tokens — the share count, reinvested dividends removed. */
+export const quoteRedeemPT = (amount: number, accrued: number): { out: number; fee: number } => ({ out: amount * principalPerPT(accrued), fee: 0 })
 
-/**
- * redeemYT(amount): the YT's share of dividends reinvested since d0, in stock units,
- * minus the 5 % yield redemption fee. accrued = dividendIndex / d0 − 1.
- */
+/** The raw tokens a YT balance is worth right now: amount × (1 − d0 / D), before the fee. */
+export const ytClaim = (amount: number, accrued: number): number => amount * (1 - principalPerPT(accrued))
+
+/** redeemYT(amount): the reinvested dividends since d0, minus the 5 % yield redemption fee. */
 export const quoteRedeemYT = (amount: number, accrued: number): { out: number; fee: number } => {
-  const gross = amount * Math.max(0, accrued)
+  const gross = ytClaim(amount, accrued)
   const fee = gross * YIELD_REDEMPTION_FEE
   return { out: gross - fee, fee }
 }

@@ -51,15 +51,14 @@ try {
     signing, `RPC_URL=${RPC}`, 'CHAIN_ID=4663', 'VERIFY=0',
     `STOCK=${mock.underlying}`, 'TICKER=JEPI', 'SERIES_ID=JEPI-MAR27', `MATURITY=${Math.floor(Date.now() / 1000) + 180 * 86400}`,
     'CAP=1000000000000000000000000', `TREASURY=0x70997970C51812dc3A010C7d01b50e0d17dc79C8`, `GUARDIAN=0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC`, `OWNER=0x90F79bf6EB2c4f870365E785982E1f101E93b906`,
-    `PRICE_FEED=${mock.priceFeed}`, `NPM=${uni.npm}`, 'QUOTE_KIND=wrapped', 'FEE=3000', 'SEED_AMOUNT=10000000000000000000000',
+    `PRICE_FEED=${mock.priceFeed}`, `NPM=${uni.npm}`, 'FEE=3000', 'SEED_AMOUNT=10000000000000000000000',
   ].join('\n'))
   console.log('\n=== dry run ===')
   sh(process.execPath, [resolve(root, 'scripts/mainnet.mjs'), '--dry-run'], { env: { ...process.env, MAINNET_ENV: envFile } })
   console.log('\n=== real run against anvil ===')
   sh(process.execPath, [resolve(root, 'scripts/mainnet.mjs')], { env: { ...process.env, MAINNET_ENV: envFile } })
   const after = JSON.parse(readFileSync(seriesPath, 'utf8')).find((s) => s.id === 'JEPI-MAR27')
-  for (const k of ['vault', 'pt', 'yt', 'accountant', 'poolPT', 'poolYT', 'quoteToken']) if (!after[k] || /^0x0+$/.test(after[k])) throw new Error(`series.json ${k} not filled`)
-  if (after.quote !== 'wrapped') throw new Error('series.json quote not wrapped')
+  for (const k of ['vault', 'pt', 'yt', 'accountant', 'poolPT', 'poolYT']) if (!after[k] || /^0x0+$/.test(after[k])) throw new Error(`series.json ${k} not filled`)
   console.log(`\nrehearsal ok: JEPI-MAR27 → vault ${after.vault}, pools ${after.poolPT} / ${after.poolYT}`)
   code = 0
 } catch (e) {

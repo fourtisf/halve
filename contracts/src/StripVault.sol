@@ -6,18 +6,19 @@ import {MultiplierAccountant} from "./MultiplierAccountant.sol";
 import {VaultToken} from "./VaultToken.sol";
 
 /// @title StripVault
-/// @notice Splits a rebasing stock token into a principal token (the share) and a yield token (the
-/// dividends until maturity). PT and YT are denominated in *base units*: one base unit is one share as
-/// it stood when the series started (dividend index d0, split factor s0).
+/// @notice Splits a Robinhood Chain stock token into a principal token (the share) and a yield token (the
+/// dividends until maturity). The stock token follows ERC-8056: raw balances never change, corporate actions
+/// only move `uiMultiplier` (one raw token = uiMultiplier shares). PT and YT are therefore denominated in
+/// raw token units, and the vault holds exactly the raw tokens deposited.
 ///
-///   split(amount)  : amount stock in → fee 0.10 % → base = net / factor() → base PT + base YT
-///   merge(base)    : base PT + base YT → base × factor() stock. Free. Works in every state. Never gated.
-///   settle()       : after maturity, once the accountant is synced; freezes dm / sm.
-///   redeemPT(base) : base × (sm / s0) stock — the share, dividends removed
-///   redeemYT(base) : base × (sm / s0) × (dm / d0 − 1) stock, less the 5 % yield fee — the dividends
+///   split(amount)  : amount raw in → fee 0.10 % → base PT + base YT, base = amount − fee
+///   merge(base)    : base PT + base YT → base raw. Free. Works in every state. Never gated.
+///   settle()       : after maturity, once the accountant is synced; freezes dm = dividendIndex.
+///   redeemPT(base) : base × d0 / dm raw   — the share with the reinvested dividends removed (splits cancel out)
+///   redeemYT(base) : base × (dm − d0) / dm raw, less the 5 % yield fee — the reinvested dividends
 ///
-/// factor() = (dividendIndex / d0) × (splitFactor / s0): stock UI units per base unit right now.
-/// The vault holds exactly the shares deposited; the token's own rebasing keeps it fully backed.
+/// d0 / dm are the accountant's dividendIndex at series start / settlement (1e18 = 1.0); the accountant keeps
+/// splits out of that index, so PT redeems its original share count and YT the growth on top of it.
 contract StripVault {
     uint256 public constant WAD = 1e18;
     uint256 public constant SPLIT_FEE_BPS = 10; // 0.10 %
@@ -33,18 +34,16 @@ contract StripVault {
     VaultToken public immutable yt;
     uint256 public immutable maturity;
     uint256 public immutable d0; // dividendIndex at series start
-    uint256 public immutable s0; // splitFactor at series start
 
     address public owner; // may only change cap, treasury and itself — never touches user funds
     address public treasury;
-    uint256 public cap; // max base units outstanding
+    uint256 public cap; // max base units outstanding (raw token units)
     bool public settled;
     uint256 public dm; // dividendIndex at settlement
-    uint256 public sm; // splitFactor at settlement
 
     event Split(address indexed account, uint256 amount, uint256 fee, uint256 base);
     event Merge(address indexed account, uint256 base, uint256 amount);
-    event Settled(uint256 dm, uint256 sm);
+    event Settled(uint256 dm);
     event RedeemPT(address indexed account, uint256 base, uint256 amount);
     event RedeemYT(address indexed account, uint256 base, uint256 amount, uint256 fee);
     event CapChanged(uint256 cap);
@@ -67,6 +66,7 @@ contract StripVault {
     ) {
         require(address(_accountant.stock()) == address(_stock), "Vault: accountant mismatch");
         require(_maturity > block.timestamp, "Vault: maturity in the past");
+        require(_treasury != address(0) && _owner != address(0), "Vault: zero");
         stock = _stock;
         accountant = _accountant;
         maturity = _maturity;
@@ -74,7 +74,6 @@ contract StripVault {
         treasury = _treasury;
         owner = _owner;
         d0 = _accountant.dividendIndex();
-        s0 = _accountant.splitFactor();
         uint8 dec = _stock.decimals();
         pt = new VaultToken(string.concat("Halve Principal ", ticker), string.concat("p", ticker), dec, address(this));
         yt = new VaultToken(string.concat("Halve Yield ", ticker), string.concat("y", ticker), dec, address(this));
@@ -92,46 +91,46 @@ contract StripVault {
         return STATE_ACTIVE;
     }
 
-    /// @notice Stock UI units per base unit right now (WAD).
-    function factor() public view returns (uint256) {
-        if (settled) return _factor(dm, sm);
-        return _factor(accountant.dividendIndex(), accountant.splitFactor());
+    /// @notice Raw tokens one PT redeems for right now (WAD): d0 / dividendIndex, i.e. the share without the
+    /// dividends reinvested so far. Frozen at settlement.
+    function principalPerPT() public view returns (uint256) {
+        uint256 d = settled ? dm : accountant.dividendIndex();
+        return (d0 * WAD) / d;
     }
 
-    /// @notice Stock owed to holders at current prices; anything above it in the vault is surplus.
+    /// @notice Raw tokens owed to holders; anything above it in the vault is surplus.
     function liabilities() public view returns (uint256) {
-        if (!settled) return (pt.totalSupply() * factor()) / WAD;
-        uint256 splitAdj = (sm * WAD) / s0;
-        uint256 ptOwed = (pt.totalSupply() * splitAdj) / WAD;
-        uint256 ytOwed = (((yt.totalSupply() * splitAdj) / WAD) * ((dm * WAD) / d0 - WAD)) / WAD;
-        return ptOwed + ytOwed;
+        if (!settled) return pt.totalSupply();
+        uint256 ppp = principalPerPT();
+        return (pt.totalSupply() * ppp) / WAD + (yt.totalSupply() * (WAD - ppp)) / WAD;
     }
 
     // --------------------------------------------------------------- writes
 
-    /// @notice Deposit `amount` stock (UI units). Paused only while the accountant holds a change.
+    /// @notice Deposit `amount` raw tokens. Paused only while the accountant holds a change.
     function split(uint256 amount) external returns (uint256 base) {
         require(state() == STATE_ACTIVE, "Vault: matured");
         require(accountant.isSynced(), "Vault: accountant held");
         require(amount > 0, "Vault: zero");
+        uint256 before = stock.balanceOf(address(this));
         require(stock.transferFrom(msg.sender, address(this), amount), "Vault: transferFrom");
-        uint256 fee = (amount * SPLIT_FEE_BPS) / 10_000;
+        uint256 received = stock.balanceOf(address(this)) - before;
+        uint256 fee = (received * SPLIT_FEE_BPS) / 10_000;
         if (fee > 0) require(stock.transfer(treasury, fee), "Vault: fee");
-        uint256 net = amount - fee;
-        base = (net * WAD) / factor();
+        base = received - fee;
         require(base > 0, "Vault: dust");
         require(pt.totalSupply() + base <= cap, "Vault: cap");
         pt.mint(msg.sender, base);
         yt.mint(msg.sender, base);
-        emit Split(msg.sender, amount, fee, base);
+        emit Split(msg.sender, received, fee, base);
     }
 
-    /// @notice Burn `base` PT and `base` YT for the stock they represent. Free, in every state.
+    /// @notice Burn `base` PT and `base` YT for the raw tokens they represent. Free, in every state.
     function merge(uint256 base) external returns (uint256 amount) {
         require(base > 0, "Vault: zero");
         pt.burn(msg.sender, base);
         yt.burn(msg.sender, base);
-        amount = _pay(msg.sender, (base * factor()) / WAD);
+        amount = _pay(msg.sender, base);
         emit Merge(msg.sender, base, amount);
     }
 
@@ -141,16 +140,15 @@ contract StripVault {
         require(block.timestamp >= maturity, "Vault: not matured");
         require(accountant.isSynced(), "Vault: accountant held");
         dm = accountant.dividendIndex();
-        sm = accountant.splitFactor();
         settled = true;
-        emit Settled(dm, sm);
+        emit Settled(dm);
     }
 
     function redeemPT(uint256 base) external returns (uint256 amount) {
         require(settled, "Vault: not settled");
         require(base > 0, "Vault: zero");
         pt.burn(msg.sender, base);
-        amount = _pay(msg.sender, (base * ((sm * WAD) / s0)) / WAD);
+        amount = _pay(msg.sender, (base * principalPerPT()) / WAD);
         emit RedeemPT(msg.sender, base, amount);
     }
 
@@ -158,14 +156,14 @@ contract StripVault {
         require(settled, "Vault: not settled");
         require(base > 0, "Vault: zero");
         yt.burn(msg.sender, base);
-        uint256 gross = (((base * ((sm * WAD) / s0)) / WAD) * ((dm * WAD) / d0 - WAD)) / WAD;
+        uint256 gross = (base * (WAD - principalPerPT())) / WAD;
         uint256 fee = (gross * YIELD_FEE_BPS) / 10_000;
         if (fee > 0) fee = _pay(treasury, fee);
         amount = _pay(msg.sender, gross - fee);
         emit RedeemYT(msg.sender, base, amount, fee);
     }
 
-    /// @notice Send stock above liabilities (post-maturity rebasing, rounding dust) to the treasury.
+    /// @notice Send raw tokens above liabilities (donations, rounding dust) to the treasury.
     function skim() external returns (uint256 surplus) {
         uint256 bal = stock.balanceOf(address(this));
         uint256 owed = liabilities();
@@ -191,12 +189,8 @@ contract StripVault {
         emit OwnerChanged(o);
     }
 
-    function _factor(uint256 D, uint256 S) internal view returns (uint256) {
-        return (((D * WAD) / d0) * S) / s0;
-    }
-
-    /// @dev Pays `amount` stock, clamped to the vault balance. The vault holds exactly the shares that were
-    /// deposited, so the clamp can only ever bite on rounding dust in the rebasing token's own maths.
+    /// @dev Pays `amount`, clamped to the vault balance: the vault holds exactly the raw tokens deposited, so
+    /// the clamp can only bite on rounding dust.
     function _pay(address to, uint256 amount) internal returns (uint256 paid) {
         uint256 bal = stock.balanceOf(address(this));
         paid = amount > bal ? bal : amount;

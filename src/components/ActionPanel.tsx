@@ -57,7 +57,7 @@ export function ActionPanel({ series, stats, position, mode, onMode }: Props) {
   const busy = splitH.busy || mergeH.busy || redeemH.busy
   const status = mode === 'split' ? splitH.status : mode === 'merge' ? mergeH.status : mode === 'redeem' ? redeemH.status : 'idle'
   const txHash = mode === 'split' ? splitH.txHash : mode === 'merge' ? mergeH.txHash : mode === 'redeem' ? redeemH.txHash : null
-  const redeemQuote = side === 'pt' ? quoteRedeemPT(a) : quoteRedeemYT(a, stats.accrued)
+  const redeemQuote = side === 'pt' ? quoteRedeemPT(a, stats.accrued) : quoteRedeemYT(a, stats.accrued)
 
   // Validation (only once a wallet is connected, so the disconnected state matches the prototype).
   const needsSettle = mode === 'redeem' && !settled

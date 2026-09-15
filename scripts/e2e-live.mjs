@@ -74,21 +74,16 @@ try {
   const mc = JSON.parse(readFileSync(resolve(contracts, 'out/Multicall3.sol/Multicall3.json'), 'utf8'))
   await rpc('anvil_setCode', [MULTICALL3, mc.deployedBytecode.object])
 
-  // real Uniswap v3 pools quoted in wStock, exactly as on mainnet (the mock pools stay as a fallback)
-  const forgeEnv = { ...process.env, PATH: process.env.PATH }
-  sh(bin('forge'), ['script', 'script/DeployWrappedStock.s.sol', '--rpc-url', RPC, '--broadcast', '--private-key', DEPLOYER_KEY, '-q'], {
-    cwd: contracts, env: { ...forgeEnv, STOCK: series.underlying, OUT: 'wrapped.local.json' },
-  })
-  const { wrappedStock } = JSON.parse(readFileSync(resolve(contracts, 'wrapped.local.json'), 'utf8'))
+  // real Uniswap v3 pools quoted in the stock token, exactly as on mainnet (the mock pools stay as a fallback)
   const uni = await deployUniswap(RPC, DEPLOYER_KEY, series.underlying)
   sh(bin('forge'), ['script', 'script/CreatePools.s.sol:SeedPools', '--rpc-url', RPC, '--broadcast', '--private-key', DEPLOYER_KEY, '-q'], {
-    cwd: contracts, env: { ...forgeEnv, VAULT: series.vault, WSTOCK: wrappedStock, NPM: uni.npm, OUT: 'pools.local.json' },
+    cwd: contracts, env: { ...process.env, VAULT: series.vault, NPM: uni.npm, OUT: 'pools.local.json' },
   })
   const pools = JSON.parse(readFileSync(resolve(contracts, 'pools.local.json'), 'utf8'))
-  Object.assign(series, { poolPT: pools.poolPT, poolYT: pools.poolYT, quote: 'wrapped', quoteToken: wrappedStock })
+  Object.assign(series, { poolPT: pools.poolPT, poolYT: pools.poolYT })
   const seriesFile = resolve(outDir, 'series.json')
   writeFileSync(seriesFile, JSON.stringify([series], null, 2))
-  console.log(`series ${series.id}: vault ${series.vault}, stock ${series.underlying}, wStock ${wrappedStock}, pools ${pools.poolPT} / ${pools.poolYT} (Uniswap v3 ${uni.factory})`)
+  console.log(`series ${series.id}: vault ${series.vault}, stock ${series.underlying}, pools ${pools.poolPT} / ${pools.poolYT} (Uniswap v3 ${uni.factory})`)
 
   // 2. site
   const env = {

@@ -42,19 +42,19 @@ export function Docs() {
       <p>Merge is never gated: not by pool liquidity, not by a held corporate action, not by maturity. That is the guarantee that makes PT + YT always worth at least one share.</p>
 
       <h3 id="maths">Maths</h3>
-      <p>The stock tokens follow ERC-8056: a balance is <em>shares × uiMultiplier</em>, and the issuer moves the multiplier for dividends (small growth) and splits (integer ratios). The accountant keeps two indices out of those moves: <code>dividendIndex</code> (D) and <code>splitFactor</code> (S), both 1e18 = 1.0.</p>
-      <pre>{`factor()      = (D / d0) × (S / s0)            stock per base unit right now
-split(amount) : base = (amount − 0.10 %) / factor()   →  base PT + base YT
-merge(base)   : stock = base × factor()               free, any state
-settle()      : dm = D, sm = S                        after maturity, once isSynced()
-redeemPT(base): stock = base × (sm / s0)              the share, dividends removed
-redeemYT(base): stock = base × (sm / s0) × (dm / d0 − 1) − 5 %   the dividends`}</pre>
-      <p>The interface derives its headline numbers from on-chain reads only:</p>
-      <pre>{`ptPrice   = PT/stock pool price (Uniswap v3 slot0, orientation by token0)
-fixedApy  = (1 / ptPrice) ^ (1 / yearsToMaturity) − 1
+      <p>Robinhood&apos;s stock tokens follow ERC-8056: the raw <code>balanceOf</code> never changes. Reinvested dividends and splits only move <code>uiMultiplier</code>, and wallets display <em>raw × multiplier</em> shares. Halve therefore accounts in raw tokens, and the accountant splits the multiplier&apos;s history into <code>dividendIndex</code> (D, reinvested dividends) and <code>splitFactor</code> (S, splits), both 1e18 = 1.0.</p>
+      <pre>{`split(amount) : base = amount − 0.10 %            →  base PT + base YT   (raw units)
+merge(base)   : base raw tokens back              free, any state
+settle()      : dm = D                            after maturity, once isSynced()
+redeemPT(base): base × d0 / dm raw                the original share count (splits cancel out)
+redeemYT(base): base × (dm − d0) / dm raw − 5 %   the reinvested dividends`}</pre>
+      <p>One raw token is worth <em>uiMultiplier</em> shares, so a PT that redeems <code>d0 / dm</code> raw tokens redeems exactly the share count it started with, and the YT gets the shares the dividends bought. The interface derives its headline numbers from on-chain reads only:</p>
+      <pre>{`ptPrice   = PT/stock pool price, raw stock per PT (Uniswap v3 slot0, orientation by token0)
+principal = d0 / dividendIndex = 1 / (1 + accrued)   raw tokens one PT redeems today
+fixedApy  = (principal / ptPrice) ^ (1 / yearsToMaturity) − 1
 leverage  = 1 / ytPrice
 accrued   = dividendIndex / d0 − 1
-usd       = Chainlink stock/USD feed (already includes the multiplier — never multiplied again)`}</pre>
+usd       = Chainlink feed: USD per raw token, multiplier already inside (never multiplied again)`}</pre>
 
       <h3 id="fees">Fees</h3>
       <div className="tbl"><table>
@@ -111,7 +111,7 @@ interface IStripVault {
     function settle() external;
     function redeemPT(uint256 base) external returns (uint256 amount);
     function redeemYT(uint256 base) external returns (uint256 amount);
-    function factor() external view returns (uint256);
+    function principalPerPT() external view returns (uint256);        // raw tokens per PT, 1e18 = 1.0
     function state() external view returns (uint8);                   // 0 active · 1 matured · 2 settled
 }`}</pre>
       <p>Full ABIs are generated into <code>src/contracts/abis/</code> from the compiled artifacts (<code>pnpm abis</code>).</p>

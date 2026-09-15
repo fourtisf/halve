@@ -2,8 +2,10 @@
 import type { Series } from '@/contracts/types'
 import type { PositionData, SeriesStats } from '@/lib/types'
 import { f } from '@/lib/format'
+import { principalPerPT } from '@/lib/math'
+import { ytClaim } from '@/lib/redeem'
 
-/** "Your position" — PT/YT/LP balances; accrued dividends = ytBalance × (dividendIndex/d0 − 1) × usdPrice. */
+/** "Your position" — PT/YT/LP balances; accrued dividends = the YT's claim (raw × (1 − d0/D)) at the feed price. */
 export function Position({ series, stats, position: p }: { series: Series; stats: SeriesStats; position: PositionData }) {
   const t = series.ticker
   const empty = !p.connected || (!p.pt && !p.yt && !p.lp)
@@ -17,8 +19,8 @@ export function Position({ series, stats, position: p }: { series: Series; stats
           <div><span>p{t}</span><b>{f(p.pt, 3)}</b></div>
           <div><span>y{t}</span><b>{f(p.yt, 3)}</b></div>
           {p.lp ? <div><span>LP</span><b>{f(p.lp, 3)}</b></div> : null}
-          <div><span>Accrued dividends</span><b className="y">${f(p.yt * stats.accrued * stats.usdPrice, 2)}</b></div>
-          <div><span>Redeems at maturity</span><b>{f(p.pt, 3)} {t}</b></div>
+          <div><span>Accrued dividends</span><b className="y">${f(ytClaim(p.yt, stats.accrued) * stats.usdPrice, 2)}</b></div>
+          <div><span>Redeems at maturity</span><b>{f(p.pt * principalPerPT(stats.accrued), 3)} {t}</b></div>
         </>)}
       </div>
     </div>

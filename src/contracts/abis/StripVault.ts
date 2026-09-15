@@ -173,19 +173,6 @@ export const stripVaultAbi = [
   },
   {
     "type": "function",
-    "name": "factor",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "liabilities",
     "inputs": [],
     "outputs": [
@@ -244,6 +231,19 @@ export const stripVaultAbi = [
   },
   {
     "type": "function",
+    "name": "principalPerPT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "pt",
     "inputs": [],
     "outputs": [
@@ -292,19 +292,6 @@ export const stripVaultAbi = [
       }
     ],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "s0",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -377,19 +364,6 @@ export const stripVaultAbi = [
       }
     ],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "sm",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -588,12 +562,6 @@ export const stripVaultAbi = [
     "inputs": [
       {
         "name": "dm",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "sm",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"

@@ -3,12 +3,12 @@
  * Merges deployment output into src/contracts/series.json by ticker (or id).
  *   node scripts/apply-deployment.mjs --ticker JEPI [--id JEPI-MAR27] file.json [file2.json …]
  * Each file is a flat JSON object; only known series fields are copied (underlying, vault, pt, yt,
- * accountant, poolPT, poolYT, priceFeed, quote, quoteToken, maturity, cap, decimals, deployBlock).
+ * accountant, poolPT, poolYT, priceFeed, maturity, cap, decimals, deployBlock).
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const FIELDS = ['underlying', 'vault', 'pt', 'yt', 'accountant', 'poolPT', 'poolYT', 'priceFeed', 'quote', 'quoteToken', 'maturity', 'cap', 'decimals', 'deployBlock']
+const FIELDS = ['underlying', 'vault', 'pt', 'yt', 'accountant', 'poolPT', 'poolYT', 'priceFeed', 'maturity', 'cap', 'decimals', 'deployBlock']
 const args = process.argv.slice(2)
 const opt = (name) => { const i = args.indexOf(name); return i >= 0 ? args.splice(i, 2)[1] : undefined }
 const ticker = opt('--ticker')

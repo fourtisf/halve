@@ -3,16 +3,15 @@
 One series at a time, one command, run on a machine that holds the deployer key (the VPS is fine).
 Nothing here needs to be typed into a chat or a browser.
 
-## Why the pools are quoted in wStock
+## How the stock tokens behave, and what that means for the vault
 
-Robinhood's stock tokens rebase: a dividend raises every balance through `uiMultiplier`. Uniswap v3
-does not support rebasing tokens; a positive rebase on tokens sitting in a pool is stuck there forever,
-so LPs would silently lose the dividends of every share in the PT/stock and YT/stock pools. Halve
-therefore quotes both pools in **wStock**, a non-rebasing wrapper (`contracts/src/WrappedStock.sol`,
-one wStock = one share, like wstETH). PT + YT is a constant number of shares, so prices in wStock do
-not drift with every dividend either. The app converts wStock prices back into stock units with
-`uiMultiplier` (`quote: "wrapped"` in `series.json`). Quoting in the stock itself (`quote: "stock"`)
-still works in the app but is not recommended on Uniswap v3.
+Robinhood's stock tokens implement ERC-8056 ("scaled UI amount"): `balanceOf` and `totalSupply` never
+change. Reinvested dividends and splits only move `uiMultiplier`, and wallets display
+`raw × multiplier` shares (after a 5 % reinvested dividend one token shows as 1.05 shares). The vault
+therefore accounts in raw tokens: split and merge are 1:1 in raw units, and at settlement PT redeems
+`raw × d0 / dm` (its original share count) while YT redeems the rest (the shares the dividends
+bought), less the 5 % fee. Because raw balances never rebase, the PT/stock and YT/stock Uniswap v3
+pools need no wrapper. The tokens are freely transferable and usable by contracts.
 
 ## What you need before starting
 
@@ -23,7 +22,7 @@ still works in the app but is not recommended on Uniswap v3.
 | `NPM` | Uniswap v3 `NonfungiblePositionManager` on Robinhood Chain: `0x73991a25c818bf1f1128deaab1492d45638de0d3`. Leave empty to deploy the series without pools. |
 | `TREASURY`, `GUARDIAN`, `OWNER` | Your addresses. Use a multisig for treasury and owner; the guardian must be able to act within days. |
 | `MATURITY`, `CAP`, `TICKER` | Series parameters; `TICKER` must match an entry in `src/contracts/series.json`. |
-| Deployer | A wallet with ETH for gas, and 2 × `SEED_AMOUNT` of the stock token if you seed liquidity. |
+| Deployer | A wallet with ETH for gas, and about 2 × `SEED_AMOUNT` of the stock token if you seed liquidity. |
 
 Do a full rehearsal on the Robinhood Chain testnet (chain id 46630) first with the same file and
 `RPC_URL` / `CHAIN_ID` changed.
@@ -62,10 +61,9 @@ What the command does, in order:
 
 1. **Preflight**: chain id 4663, deployer balance, `STOCK.uiMultiplier()`, `PRICE_FEED.latestRoundData()`, code at `NPM`, `MATURITY` in the future, enough stock for seeding.
 2. **`DeploySeries.s.sol`**: `MultiplierAccountant` (or reuse `ACCOUNTANT`) and `StripVault` with its `pJEPI` / `yJEPI` tokens. Verified on Blockscout when `VERIFY=1`.
-3. **`DeployWrappedStock.s.sol`**: the wStock for this stock token (skipped when `WSTOCK` is given).
-4. **`CreatePools.s.sol`**: PT/wStock and YT/wStock pools at `PT_PRICE` / `YT_PRICE`, fee tier `FEE`. With `SEED_AMOUNT`, `SeedPools` first splits that much stock (PT + YT) and wraps the same amount, then seeds both pools full-range.
-5. **`scripts/apply-deployment.mjs`** writes every address plus `quote`, `quoteToken`, `maturity`, `cap`, `deployBlock` into `src/contracts/series.json`.
-6. **`pnpm check:live`** proves every read the app makes answers, including that each pool pairs PT/YT with the wStock.
+3. **`CreatePools.s.sol`**: PT/stock and YT/stock pools at `PT_PRICE` / `YT_PRICE`, fee tier `FEE`. With `SEED_AMOUNT`, `SeedPools` first splits that much stock (PT + YT), then seeds both pools full-range with stock as the quote.
+4. **`scripts/apply-deployment.mjs`** writes every address plus `maturity`, `cap`, `deployBlock` into `src/contracts/series.json`.
+5. **`pnpm check:live`** proves every read the app makes answers, including that each pool pairs PT/YT with the stock and that the stock answers `uiMultiplier()`.
 
 Then:
 
@@ -105,6 +103,6 @@ becomes a Blockscout link. Any $HALVE/USDC pool is a separate decision; nothing 
 - **Liquidity**: seeding is capital you commit; without it the app shows no prices.
 
 Two local rehearsals exist and run in CI: `pnpm test:e2e:live` (real Uniswap v3 factory + position
-manager on anvil, wStock, seeded pools, split / merge / dividend through the UI) and
+manager on anvil, seeded pools, split / merge / dividend through the UI) and
 `pnpm rehearse:mainnet`, which runs `scripts/mainnet.mjs` itself, dry run and real, against anvil with a
 generated `.env` and checks that `series.json` comes out filled.

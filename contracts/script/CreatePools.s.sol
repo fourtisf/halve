@@ -8,10 +8,10 @@ import {INonfungiblePositionManager, IUniswapV3PoolMinimal} from "../src/interfa
 import {PriceMath} from "../src/libraries/PriceMath.sol";
 
 /// @notice Creates (and optionally seeds) the PT / QUOTE and YT / QUOTE Uniswap v3 pools of one series.
-/// Env: NPM (NonfungiblePositionManager), QUOTE (wStock recommended), VAULT (or PT + YT),
-///      [FEE=3000] [PT_PRICE=0.96e18] [YT_PRICE=0.04e18] quote per token, human units, WAD
-///      [SEED_PT] [SEED_QUOTE_PT] [SEED_YT] [SEED_QUOTE_YT] full-range liquidity from the broadcaster
-///      [QUOTE_KIND=wrapped] [OUT=deployments/pools.json]
+/// Env: NPM (NonfungiblePositionManager), QUOTE (the stock token: raw balances do not rebase, so Uniswap v3 is
+///      fine with it), VAULT (or PT + YT), [FEE=3000] [PT_PRICE=0.96e18] [YT_PRICE=0.04e18] quote per token (WAD),
+///      [SEED_PT] [SEED_QUOTE_PT] [SEED_YT] [SEED_QUOTE_YT] full-range liquidity from the broadcaster,
+///      [OUT=deployments/pools.json]
 contract CreatePools is Script {
     function run() external virtual {
         address npm = vm.envAddress("NPM");
@@ -28,7 +28,7 @@ contract CreatePools is Script {
         address poolPT = _pool(npm, pt, quote, fee, vm.envOr("PT_PRICE", uint256(0.96e18)), vm.envOr("SEED_PT", uint256(0)), vm.envOr("SEED_QUOTE_PT", uint256(0)), msg.sender);
         address poolYT = _pool(npm, yt, quote, fee, vm.envOr("YT_PRICE", uint256(0.04e18)), vm.envOr("SEED_YT", uint256(0)), vm.envOr("SEED_QUOTE_YT", uint256(0)), msg.sender);
         vm.stopBroadcast();
-        _write(poolPT, poolYT, quote, fee, vm.envOr("QUOTE_KIND", string("wrapped")), vm.envOr("OUT", string("deployments/pools.json")));
+        _write(poolPT, poolYT, quote, fee, vm.envOr("OUT", string("deployments/pools.json")));
     }
 
     /// @dev Create + initialise at `priceWad` quote per token, then mint a full-range position if seeds are given.
@@ -63,26 +63,24 @@ contract CreatePools is Script {
         console2.log("pool", token, pool);
     }
 
-    function _write(address poolPT, address poolYT, address quote, uint24 fee, string memory kind, string memory out) internal {
+    function _write(address poolPT, address poolYT, address quote, uint24 fee, string memory out) internal {
         string memory k = "pools";
         vm.serializeAddress(k, "poolPT", poolPT);
         vm.serializeAddress(k, "poolYT", poolYT);
         vm.serializeAddress(k, "quoteToken", quote);
-        vm.serializeUint(k, "fee", fee);
-        string memory json = vm.serializeString(k, "quote", kind);
+        string memory json = vm.serializeUint(k, "fee", fee);
         vm.writeFile(out, json);
         console2.log(json);
     }
 }
 
-/// @notice Split-wrap-seed in one go, on any chain: the broadcaster splits AMOUNT stock (gets PT + YT), wraps
-/// another AMOUNT into wStock, then creates both pools and seeds them full-range at PT_PRICE / YT_PRICE.
-/// Needs 2 × AMOUNT stock in the broadcaster's wallet. Env: VAULT, WSTOCK, NPM, [AMOUNT=10000e18] [FEE] [PT_PRICE] [YT_PRICE] [OUT].
+/// @notice Split-and-seed in one go, on any chain: the broadcaster splits AMOUNT raw stock (gets PT + YT), then
+/// creates both pools quoted in the stock token and seeds them full-range at PT_PRICE / YT_PRICE. Needs about
+/// 2 × AMOUNT stock in the broadcaster's wallet. Env: VAULT, NPM, [AMOUNT=10000e18] [FEE] [PT_PRICE] [YT_PRICE] [OUT].
 contract SeedPools is CreatePools {
     function run() external override {
         StripVault vault = StripVault(vm.envAddress("VAULT"));
         IStockToken stock = vault.stock();
-        address wstock = vm.envAddress("WSTOCK");
         address npm = vm.envAddress("NPM");
         uint256 amount = vm.envOr("AMOUNT", uint256(10_000e18));
         uint24 fee = uint24(vm.envOr("FEE", uint256(3000)));
@@ -92,14 +90,10 @@ contract SeedPools is CreatePools {
         vm.startBroadcast();
         stock.approve(address(vault), amount);
         uint256 base = vault.split(amount);
-        stock.approve(wstock, amount);
-        (bool ok, bytes memory ret) = wstock.call(abi.encodeWithSignature("wrap(uint256)", amount));
-        require(ok, "wrap failed");
-        uint256 shares = abi.decode(ret, (uint256));
         // full-range at price P uses quote = base × P, so the seeds are spent completely
-        address poolPT = _pool(npm, address(vault.pt()), wstock, fee, ptPrice, base, (shares * ptPrice) / 1e18, msg.sender);
-        address poolYT = _pool(npm, address(vault.yt()), wstock, fee, ytPrice, base, (shares * ytPrice) / 1e18, msg.sender);
+        address poolPT = _pool(npm, address(vault.pt()), address(stock), fee, ptPrice, base, (base * ptPrice) / 1e18, msg.sender);
+        address poolYT = _pool(npm, address(vault.yt()), address(stock), fee, ytPrice, base, (base * ytPrice) / 1e18, msg.sender);
         vm.stopBroadcast();
-        _write(poolPT, poolYT, wstock, fee, "wrapped", vm.envOr("OUT", string("pools.local.json")));
+        _write(poolPT, poolYT, address(stock), fee, vm.envOr("OUT", string("pools.local.json")));
     }
 }

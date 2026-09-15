@@ -86,15 +86,15 @@ events read from every live vault, filtered by the indexed `account`) with a PnL
 
 | Contract | Role |
 |---|---|
-| `StripVault` | One per series. `split(amount)` takes 0.10 % and mints `base = net / factor()` PT + YT; `merge(base)` burns both and pays `base × factor()` in every state, never gated; `settle()` after maturity once the accountant is synced; `redeemPT` / `redeemYT` (5 % yield fee); `skim()` sends post-settlement surplus to the treasury. Owner can only change the cap and the treasury. |
+| `StripVault` | One per series, in raw token units (ERC-8056: raw balances never rebase, only the display multiplier moves). `split(amount)` takes 0.10 % and mints `base = net` PT + YT; `merge(base)` burns both and pays `base` raw in every state, never gated; `settle()` after maturity once the accountant is synced; `redeemPT` pays `base × d0 / dm` (the original share count), `redeemYT` the rest less the 5 % yield fee; `skim()` sends donations / dust to the treasury. Owner can only change cap, treasury and itself. |
 | `MultiplierAccountant` | One per stock token. `sync()` (permissionless, idempotent) classifies each `uiMultiplier` change: 0 < r ≤ 3 % dividend, clean p/q ratio ≥ 20 % from 1 split, else held for the guardian behind a 2-day timelock (`resolvePending(kind)` accepts split or special only). Exposes `isSynced`, `dividendIndex`, `splitFactor`, `dividendIndexAt(ts)`, `pending()`, `checkpointCount()`, `checkpointAt(i)`. |
 | `VaultToken` | PT / YT ERC-20, mint/burn by the vault only. |
 | `HalveToken` | $HALVE: fixed 1 B supply to the treasury, `burn()` with a running `burned` counter. |
-| `mocks/` | `MockStockToken` (ERC-8056 style: balance = shares × multiplier), `MockV3Pool` (`slot0`, `token0`, `Swap`), `MockAggregator` (Chainlink shape), vendored `Multicall3` for local chains. |
+| `mocks/` | `MockStockToken` (ERC-8056: raw balances, `uiMultiplier` display-only, `uiAmount()`), `MockV3Pool` (`slot0`, `token0`, `Swap`), `MockAggregator` (Chainlink shape), vendored `Multicall3` for local chains. |
 
-PT and YT are in *base units*: one base unit is one share as it stood when the series started
-(`d0`, `s0`). `factor() = (dividendIndex / d0) × (splitFactor / s0)` is the stock per base unit right
-now, so the vault holds exactly the shares deposited and the token's own rebasing keeps it backed.
+PT and YT are in raw token units. The accountant turns the multiplier's history into `dividendIndex`
+(reinvested dividends) and `splitFactor` (splits); at settlement a PT redeems `d0 / dm` raw tokens,
+which is exactly the share count it started with, and the YT redeems the shares the dividends bought.
 
 ```bash
 cd contracts
@@ -104,8 +104,8 @@ pnpm abis                          # from the repo root: copies compiled ABIs in
 
 ### Deploying a series
 
-`docs/MAINNET.md` is the mainnet runbook: `node scripts/mainnet.mjs` deploys a series, its wStock quote
-asset and the Uniswap v3 pools, writes `series.json` and runs the preflight, from a `.env.mainnet` file.
+`docs/MAINNET.md` is the mainnet runbook: `node scripts/mainnet.mjs` deploys a series and its
+Uniswap v3 pools, writes `series.json` and runs the preflight, from a `.env.mainnet` file.
 
 ```bash
 # 1. local: everything mocked on anvil (what `pnpm test:e2e:live` does)
