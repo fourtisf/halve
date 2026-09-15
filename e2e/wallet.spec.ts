@@ -7,13 +7,14 @@ const FAKE_PROVIDER = `
 (() => {
   const listeners = {};
   let chainId = '0x1';
+  let approved = false; // like a real wallet: no accounts exposed until the site is approved
   const provider = {
     isMetaMask: false,
     isRabby: true,
     request: async ({ method, params }) => {
       switch (method) {
-        case 'eth_requestAccounts':
-        case 'eth_accounts': return ['${ACCOUNT}'];
+        case 'eth_requestAccounts': approved = true; return ['${ACCOUNT}'];
+        case 'eth_accounts': return approved ? ['${ACCOUNT}'] : [];
         case 'eth_chainId': return chainId;
         case 'net_version': return String(parseInt(chainId, 16));
         case 'wallet_switchEthereumChain': chainId = params[0].chainId; (listeners.chainChanged || []).forEach((f) => f(chainId)); return null;
