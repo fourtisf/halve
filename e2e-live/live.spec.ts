@@ -52,7 +52,7 @@ const first = (page: Page, sel: string) => page.locator(sel).first()
 
 async function connect(page: Page) {
   await page.addInitScript(PROVIDER)
-  await page.goto('/app?s=0')
+  await page.goto('/app?s=0&tab=split')
   await page.click('#wbtn')
   await page.click('#wmodal .wopt[data-wallet="injected"]')
   await expect(page.locator('#wbtn')).toHaveText('0x7099…79C8')

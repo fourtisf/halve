@@ -4,7 +4,7 @@ import { useSwitchChain } from 'wagmi'
 import type { Series } from '@/contracts/types'
 import type { PositionData, SeriesStats } from '@/lib/types'
 import { EARN_TIERS, SPLIT_FEE } from '@/contracts/constants'
-import { f } from '@/lib/format'
+import { f, monthYear } from '@/lib/format'
 import { earnApr } from '@/lib/mock'
 import { useMockPositions } from '@/lib/mockStore'
 import { useToast } from '@/lib/toast'
@@ -26,16 +26,23 @@ type Props = {
   position: PositionData
   mode: Mode
   onMode: (m: Mode) => void
+  /** ?side= from the URL: which half the Buy tab starts on. */
+  initialSide?: 'pt' | 'yt'
 }
 
 const trim = (n: number) => n.toFixed(4).replace(/\.?0+$/, '')
 
-/** Split / Merge / Earn panel — behaviour mirrors the prototype's syncApp()/calc()/go(); Redeem appears after maturity. */
-export function ActionPanel({ series, stats, position, mode, onMode }: Props) {
+/**
+ * Buy / Split / Merge / Earn panel — behaviour mirrors the prototype's syncApp()/calc()/go(); Redeem appears after maturity.
+ * Buy is the front door for newcomers: two plain-language choices, pay with ETH or the stock, one button.
+ */
+export function ActionPanel({ series, stats, position, mode, onMode, initialSide }: Props) {
   const t = series.ticker
-  const [amt, setAmt] = useState('1')
-  const [side, setSide] = useState<'pt' | 'yt'>('pt')
-  const [payWith, setPayWith] = useState<PayWith>('eth')
+  const [amt, setAmt] = useState(mode === 'buy' ? '0.1' : '1')
+  const [side, setSide] = useState<'pt' | 'yt'>(initialSide ?? 'pt')
+  const [payWith, setPayWithState] = useState<PayWith>('eth')
+  const setPayWith = (p: PayWith) => { setPayWithState(p); setAmt(p === 'eth' ? '0.1' : '1') }
+  useEffect(() => { if (initialSide) setSide(initialSide) }, [initialSide])
   const { toast } = useToast()
   const { open } = useWalletModal()
   const { switchChain } = useSwitchChain()
@@ -47,7 +54,7 @@ export function ActionPanel({ series, stats, position, mode, onMode }: Props) {
 
   const matured = isMatured(series, stats)
   const settled = isSettled(stats) || (matured && stats.isMock)
-  useEffect(() => { if (mode === 'redeem' && !matured) onMode('split') }, [mode, matured, onMode])
+  useEffect(() => { if (mode === 'redeem' && !matured) onMode('buy') }, [mode, matured, onMode])
 
   const a = parseFloat(amt) || 0
   const n = a * (1 - SPLIT_FEE)
@@ -56,6 +63,9 @@ export function ActionPanel({ series, stats, position, mode, onMode }: Props) {
   const apr = f(earnApr(divYield), 1)
   const wallet = position.connected
   const buyToken = `${side === 'pt' ? 'p' : 'y'}${t}`
+  const maturityLabel = monthYear(series.maturity)
+  const ptPct = stats.ready && stats.ptPrice > 0 ? `${f(stats.ptPrice * 100, 0)}%` : '—'
+  const ytPct = stats.ready && ytPrice > 0 ? `${f(ytPrice * 100, 1)}%` : '—'
   const balance = mode === 'merge' ? Math.min(position.pt, position.yt) : mode === 'redeem' ? (side === 'pt' ? position.pt : position.yt) : mode === 'buy' && payWith === 'eth' ? buyH.ethBalance : position.stock
   const inAsset = mode === 'merge' ? `p${t} + y${t}` : mode === 'redeem' ? (side === 'pt' ? `p${t}` : `y${t}`) : mode === 'buy' && payWith === 'eth' ? 'ETH' : t
   const busy = splitH.busy || mergeH.busy || redeemH.busy || buyH.busy
@@ -116,7 +126,7 @@ export function ActionPanel({ series, stats, position, mode, onMode }: Props) {
 
   const sideNote =
     mode === 'buy'
-      ? `Swaps on Uniswap v3 in one transaction${payWith === 'eth' ? `: ETH → ${t} → ${buyToken}` : ''}. Slippage 1%. You can always merge p${t} + y${t} back into ${t}, or sell either one the same way.`
+      ? `One transaction on Uniswap v3${payWith === 'eth' ? ` (ETH → ${t} → ${buyToken})` : ''}, up to 1% price movement allowed. Sell it back any time the same way, or merge p${t} + y${t} into ${t} for free.`
       : mode === 'split'
       ? `Keep both and nothing changes. Sell y${t} to lock ${apy}% fixed. Sell p${t} to own only the dividends.`
       : mode === 'merge'
@@ -138,14 +148,25 @@ export function ActionPanel({ series, stats, position, mode, onMode }: Props) {
       </div>
       {matured && mode !== 'redeem' && <Banner kind="y">Series matured · {settled ? 'redemption open' : 'awaiting settle()'}</Banner>}
       {mode === 'buy' && (<>
-        <div className="side-sel" id="buySide">
-          <button className={side === 'pt' ? 'on' : undefined} onClick={() => setSide('pt')}>Buy p{t}</button>
-          <button className={side === 'yt' ? 'on' : undefined} onClick={() => setSide('yt')}>Buy y{t}</button>
+        <div className="step">1 · What do you want?</div>
+        <div className="pick" id="buySide">
+          <button className={`pt${side === 'pt' ? ' on' : ''}`} onClick={() => setSide('pt')} aria-pressed={side === 'pt'}>
+            <small>Fixed return</small>
+            <b>{apy}%<em>fixed</em></b>
+            <span>Buy p{t} for {ptPct} of a share today. In {maturityLabel} it becomes 1 full {t}.</span>
+          </button>
+          <button className={`yt${side === 'yt' ? ' on' : ''}`} onClick={() => setSide('yt')} aria-pressed={side === 'yt'}>
+            <small>Dividends only</small>
+            <b>{ytPct}<em>of a share</em></b>
+            <span>Buy y{t} and collect every dividend {t} pays until {maturityLabel}.</span>
+          </button>
         </div>
+        <div className="step">2 · Pay with</div>
         <div className="side-sel" id="payWith">
-          <button className={payWith === 'eth' ? 'on' : undefined} onClick={() => setPayWith('eth')}>Pay with ETH</button>
-          <button className={payWith === 'stock' ? 'on' : undefined} onClick={() => setPayWith('stock')}>Pay with {t}</button>
+          <button className={payWith === 'eth' ? 'on' : undefined} onClick={() => setPayWith('eth')}>ETH</button>
+          <button className={payWith === 'stock' ? 'on' : undefined} onClick={() => setPayWith('stock')}>{t}</button>
         </div>
+        <div className="step">3 · How much</div>
       </>)}
       {mode === 'redeem' && (
         <div className="side-sel" id="redeemSide">
@@ -180,7 +201,7 @@ export function ActionPanel({ series, stats, position, mode, onMode }: Props) {
           <div className="fld" style={{ gridColumn: '1/-1' }}><label>You receive</label><div className="v" id="o1">{f(redeemQuote.out, 4)} {t}</div></div>
         )}
         {mode === 'buy' && (
-          <div className={`fld ${side === 'pt' ? 'p' : 'y'}`} style={{ gridColumn: '1/-1' }}><label>You receive{buyH.quoting ? ' · quoting' : ''}</label><div className="v" id="o1">{buyH.amountOut > 0 ? `${f(buyH.amountOut, 4)} ${buyToken}` : `— ${buyToken}`}</div></div>
+          <div className={`fld ${side === 'pt' ? 'p' : 'y'}`} style={{ gridColumn: '1/-1' }}><label>You get{buyH.quoting ? ' · quoting' : ''}</label><div className="v" id="o1">{buyH.amountOut > 0 ? `${f(buyH.amountOut, 4)} ${buyToken}` : `— ${buyToken}`}</div></div>
         )}
       </div>
       <div className="meta" id="meta">
@@ -200,9 +221,12 @@ export function ActionPanel({ series, stats, position, mode, onMode }: Props) {
           <div><span>Est. APR</span><b className="g">{apr}%</b></div>
         </>)}
         {mode === 'buy' && (<>
-          <div><span>Route</span><b id="route">{buyH.routeLabel ?? '—'}</b></div>
-          <div><span>Min. received (1% slippage)</span><b>{f(buyH.minOut, 4)} {buyToken}</b></div>
+          {side === 'pt'
+            ? <div><span>Worth in {maturityLabel}</span><b className="g" id="buyLater">{f(buyH.amountOut, 4)} {t}</b></div>
+            : <div><span>Collects</span><b className="y" id="buyLater">every {t} dividend until {maturityLabel}</b></div>}
           <div><span>Value now</span><b>${f(buyH.amountOut * (side === 'pt' ? stats.ptPrice : ytPrice) * px, 2)}</b></div>
+          <div><span>At least (1% slippage)</span><b>{f(buyH.minOut, 4)} {buyToken}</b></div>
+          <div><span>Route</span><b id="route">{buyH.routeLabel ?? '—'}</b></div>
         </>)}
         {mode === 'redeem' && (<>
           <div><span>Fee</span><b>{side === 'pt' ? '0 · free' : `${f(redeemQuote.fee, 4)} ${t} (5%)`}</b></div>
@@ -213,6 +237,16 @@ export function ActionPanel({ series, stats, position, mode, onMode }: Props) {
       <button className="btn btn-white" style={{ width: '100%', height: 42 }} id="go" disabled={disabled} onClick={go}>{label}</button>
       {txHash && <a className="txlink" id="txlink" href={explorerTx(txHash)} target="_blank" rel="noopener noreferrer">View on Blockscout ↗</a>}
       <div className="note" id="sideNote">{sideNote}</div>
+      {mode === 'buy' && (
+        <details className="howto" id="howto">
+          <summary>New to this? Three steps</summary>
+          <ol>
+            <li><b>Get a wallet.</b> MetaMask or Rabby, as a browser extension or a phone app. Then press Connect wallet above.</li>
+            <li><b>Put some ETH in it on Robinhood Chain.</b> ETH is what you pay with, and it covers the small network fee. Move ETH over with the <a href="https://docs.robinhood.com/chain/bridging/" target="_blank" rel="noopener noreferrer">Robinhood Chain bridge</a>. Halve asks your wallet to switch to the right network.</li>
+            <li><b>Pick, type an amount, press Buy.</b> Your p{t} or y{t} shows under Position right away. Sell it back the same way whenever you like.</li>
+          </ol>
+        </details>
+      )}
     </div>
   )
 }

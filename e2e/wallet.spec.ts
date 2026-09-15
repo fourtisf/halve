@@ -35,7 +35,7 @@ const FAKE_PROVIDER = `
 test.describe('real wallet connection path (fake injected provider)', () => {
   test('connects through the Rabby option, switches to chain 4663, shows the address and balance', async ({ page }) => {
     await page.addInitScript(FAKE_PROVIDER)
-    await page.goto('/app?s=1')
+    await page.goto('/app?s=1&tab=split')
     await page.click('#wbtn')
     const rabby = page.locator('#wmodal .wopt[data-wallet="rabby"]')
     await expect(rabby).toContainText('Installed')

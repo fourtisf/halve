@@ -35,6 +35,9 @@ function BlockLabel() {
   return <span id="blk">{n != null ? `block ${fmtInt(n)}` : 'block —'}</span>
 }
 
+/** Buy is the default view; ?tab= picks the others. Portfolio keeps whatever the panel was showing. */
+const modeFor = (tab: string | null): Mode => (tab === 'earn' ? 'earn' : tab === 'split' ? 'split' : tab === 'merge' ? 'merge' : 'buy')
+
 /** /app — mirrors the prototype's #p-app page and its ?s=&side=&tab= params. */
 export function AppPage() {
   const params = useSearchParams()
@@ -43,19 +46,15 @@ export function AppPage() {
   const tab = params.get('tab')
   const side = params.get('side')
   const { series, index } = useSeriesAt(sParam == null ? 1 : Number(sParam))
-  const [mode, setMode] = useState<Mode>(tab === 'earn' ? 'earn' : tab === 'buy' ? 'buy' : 'split')
-  useEffect(() => {
-    if (tab === 'earn') setMode('earn')
-    else if (tab === 'buy') setMode('buy')
-    else if (side === 'yt' || tab == null) setMode('split')
-  }, [tab, side])
+  const [mode, setMode] = useState<Mode>(modeFor(tab))
+  useEffect(() => { if (tab !== 'portfolio') setMode(modeFor(tab)) }, [tab])
 
   const all = useAllSeriesStats()
   const stats = all.stats[index] ?? mockStats(series)
   const ledger = useLedger(series)
   const position = usePosition(series)
   const history = useYtHistory(series, index)
-  const active = tab === 'earn' ? 'earn' : tab === 'buy' ? 'buy' : tab === 'portfolio' ? 'portfolio' : 'split'
+  const active = tab === 'earn' ? 'earn' : tab === 'portfolio' ? 'portfolio' : tab === 'split' || tab === 'merge' ? 'split' : 'buy'
 
   const pick = (i: number) => {
     const q = new URLSearchParams(params.toString())
@@ -78,7 +77,7 @@ export function AppPage() {
           <DividendLedger ledger={ledger} />
         </div>
         <div>
-          <ActionPanel series={series} stats={stats} position={position} mode={mode} onMode={setMode} />
+          <ActionPanel series={series} stats={stats} position={position} mode={mode} onMode={setMode} initialSide={side === 'yt' ? 'yt' : side === 'pt' ? 'pt' : undefined} />
           <Position series={series} stats={stats} position={position} />
         </div>
       </div>

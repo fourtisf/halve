@@ -6,6 +6,7 @@ test.describe('/app (mock mode)', () => {
   test('defaults to SCHD, ticks the block counter and switches series', async ({ page }) => {
     await page.goto('/app')
     await expect(text(page, '#aTtl')).toHaveText('SCHD · Mar 2027')
+    await expect(page.locator('#tBuy')).toHaveClass(/on/) // Buy is the front door
     await expect(text(page, '#kApy')).toHaveText('8.3%')
     await expect(text(page, '#kYt')).toHaveText('0.041')
     await expect(text(page, '#blk')).toHaveText('block 4,812,337')
@@ -25,7 +26,7 @@ test.describe('/app (mock mode)', () => {
   })
 
   test('split / merge / earn quotes follow the prototype maths', async ({ page }) => {
-    await page.goto('/app?s=1')
+    await page.goto('/app?s=1&tab=split')
     await page.fill('#amt', '2.5')
     await expect(text(page, '#o1')).toHaveText('2.498 pSCHD')
     await expect(text(page, '#o2')).toHaveText('2.498 ySCHD')
@@ -47,14 +48,26 @@ test.describe('/app (mock mode)', () => {
     await expect(page.locator('.appbar a.on')).toHaveText('Buy')
     await expect(text(page, '#inLbl')).toHaveText('You pay')
     await expect(text(page, '#inAsset')).toHaveText('ETH')
+    await expect(page.locator('#amt')).toHaveValue('0.1')
+    // plain-language choice cards: fixed return (PT) is selected first, dividends only (YT) is the other
+    await expect(page.locator('#buySide button.pt')).toHaveClass(/on/)
+    await expect(page.locator('#buySide button.pt')).toContainText('8.3%')
+    await expect(page.locator('#buySide button.pt')).toContainText('In Mar 2027 it becomes 1 full SCHD')
+    await expect(page.locator('#buySide button.yt')).toContainText('4.1%')
+    await expect(page.locator('.step')).toHaveCount(3)
+    await expect(page.locator('#howto summary')).toHaveText('New to this? Three steps')
+    await expect(page.locator('#howto a')).toHaveAttribute('href', 'https://docs.robinhood.com/chain/bridging/')
     await page.fill('#amt', '0.1')
     // 0.1 ETH × $4,000 / $28.90 = 13.841 SCHD → / 0.9587 PT price × (1 − 0.3 % fee)
     await expect(text(page, '#o1')).toHaveText(/^14\.39\d\d pSCHD$/)
     await expect(text(page, '#route')).toHaveText('ETH → SCHD → pSCHD')
-    await page.locator('#buySide button', { hasText: 'Buy ySCHD' }).click()
+    await expect(text(page, '#buyLater')).toHaveText(/^14\.39\d\d SCHD$/) // a PT is one full share at maturity
+    await page.locator('#buySide button', { hasText: 'Dividends only' }).click()
     await expect(text(page, '#o1')).toHaveText(/ySCHD$/)
-    await page.locator('#payWith button', { hasText: 'Pay with SCHD' }).click()
+    await expect(text(page, '#buyLater')).toHaveText('every SCHD dividend until Mar 2027')
+    await page.locator('#payWith button', { hasText: 'SCHD' }).click()
     await expect(text(page, '#inAsset')).toHaveText('SCHD')
+    await expect(page.locator('#amt')).toHaveValue('1') // amount resets to a sensible default for the new asset
     await page.fill('#amt', '1')
     await expect(text(page, '#o1')).toHaveText(/^24\.1\d\d\d ySCHD$/) // 1 / 0.0413 × 0.997
     await expect(text(page, '#go')).toHaveText('Connect wallet')
@@ -70,8 +83,13 @@ test.describe('/app (mock mode)', () => {
     await page.goto('/app?tab=earn')
     await expect(page.locator('#tEarn')).toHaveClass(/on/)
     await expect(page.locator('.appbar a.on')).toHaveText('Earn')
-    await page.goto('/app?s=1&side=yt')
+    await page.goto('/app?s=1&side=yt') // "Buy YT" from the home page: Buy tab, dividends card selected
+    await expect(page.locator('#tBuy')).toHaveClass(/on/)
+    await expect(page.locator('#buySide button.yt')).toHaveClass(/on/)
+    await expect(text(page, '#o1')).toHaveText(/ySCHD$/)
+    await page.goto('/app?s=1&tab=split')
     await expect(page.locator('#tSplit')).toHaveClass(/on/)
+    await expect(page.locator('.appbar a.on')).toHaveText('Split')
   })
 
   test('wallet modal opens from nav and from the action button, traps focus, closes on Escape', async ({ page }) => {
@@ -90,7 +108,7 @@ test.describe('/app (mock mode)', () => {
   })
 
   test('demo wallet: connect, split, position, merge, validation, earn, portfolio', async ({ page }) => {
-    await page.goto('/app?s=1')
+    await page.goto('/app?s=1&tab=split')
     await page.click('#wbtn')
     await page.click('#wdemo')
     await expect(page.locator('#toast')).toHaveText('Connected with Demo wallet')
