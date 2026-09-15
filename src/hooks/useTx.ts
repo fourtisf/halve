@@ -9,7 +9,7 @@ import { invalidateChainReads } from '@/lib/queries'
 import { shortError, useToast } from '@/lib/toast'
 import type { TxStatus } from '@/lib/types'
 
-type Step = { address: Address; abi: Abi; functionName: string; args: readonly unknown[]; label: 'approving' | 'sending' }
+export type Step = { address: Address; abi: Abi; functionName: string; args: readonly unknown[]; label: 'approving' | 'sending'; value?: bigint }
 
 /** Shared approve-then-call runner used by useSplit / useMerge / useRedeem. */
 export function useTx() {
@@ -40,7 +40,7 @@ export function useTx() {
         for (const step of steps) {
           if (!step) continue
           setStatus(step.label)
-          const hash = await writeContractAsync({ address: step.address, abi: step.abi, functionName: step.functionName, args: step.args, chainId: CHAIN_ID })
+          const hash = await writeContractAsync({ address: step.address, abi: step.abi, functionName: step.functionName, args: step.args, chainId: CHAIN_ID, value: step.value })
           setTxHash(hash)
           setStatus('confirming')
           const rc = await publicClient.waitForTransactionReceipt({ hash })

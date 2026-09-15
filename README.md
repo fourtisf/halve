@@ -47,6 +47,7 @@ without a browser extension. The e2e suite uses it.
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_*`) | empty | Optional Redis for the YT price and TVL series. Without it, samples are stored as JSON files under `HISTORY_DIR` (default `./data/history`), which is fine for a single VPS. |
 | `CRON_SECRET` | empty | Protects `/api/cron/sample`. |
 | `NEXT_PUBLIC_MORPHO_BLUE` | empty | Morpho Blue address on 4663; enables live lend-market reads. |
+| `NEXT_PUBLIC_UNISWAP_ROUTER`, `NEXT_PUBLIC_UNISWAP_QUOTER`, `NEXT_PUBLIC_WETH` | Uniswap's Robinhood Chain deployment (SwapRouter02, QuoterV2, WETH9) | Used by the Buy tab; override only for local chains. |
 | `NEXT_PUBLIC_DOCS_URL`, `…_CONTRACTS_URL`, `…_AUDIT_URL`, `…_API_URL` | `/docs`, `/docs#contracts`, `/docs#security`, `/docs#api` | Replace the built-in docs pages with external URLs. |
 | `NEXT_PUBLIC_X_URL`, `…_TELEGRAM_URL`, `…_DISCORD_URL` | X defaults to `https://x.com/Halvefinance`, others `#` | Community links. |
 | `BLOCKED_COUNTRIES` (server) | `US` | Comma-separated ISO alpha-2 list. `/app` and `/lend` redirect to `/restricted` when the edge sets a country header (`cf-ipcountry`, `x-vercel-ip-country`, `x-country-code`, `x-geo-country`). See docs/OPERATIONS.md. |
@@ -64,7 +65,7 @@ samples read-through, so the series fills from traffic alone).
 | Route | Content |
 |---|---|
 | `/` | Hero, two-way cards, stats strip, markets table, how it works, why it holds, trust, FAQ, CTA |
-| `/app` | Series selector, KPIs, YT price chart (30d), dividend ledger, Split / Merge / Earn panel (+ Redeem after maturity), your position. Params: `?s=<index>`, `?side=yt`, `?tab=earn\|portfolio` |
+| `/app` | Series selector, KPIs, YT price chart (30d), dividend ledger, Buy / Split / Merge / Earn panel (+ Redeem after maturity), your position. Buy swaps ETH → stock → PT or YT (or stock → PT/YT) on Uniswap v3 in one transaction, quoted by QuoterV2. Params: `?s=<index>`, `?side=yt`, `?tab=buy\|earn\|portfolio` |
 | `/lend` | Morpho markets per PT |
 | `/oracle` | Accountant status table + read API docs |
 | `/token` | $HALVE revenue, allocation, stake, vote, supply (`src/content/token.json`) |

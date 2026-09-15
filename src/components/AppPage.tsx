@@ -43,9 +43,10 @@ export function AppPage() {
   const tab = params.get('tab')
   const side = params.get('side')
   const { series, index } = useSeriesAt(sParam == null ? 1 : Number(sParam))
-  const [mode, setMode] = useState<Mode>(tab === 'earn' ? 'earn' : 'split')
+  const [mode, setMode] = useState<Mode>(tab === 'earn' ? 'earn' : tab === 'buy' ? 'buy' : 'split')
   useEffect(() => {
     if (tab === 'earn') setMode('earn')
+    else if (tab === 'buy') setMode('buy')
     else if (side === 'yt' || tab == null) setMode('split')
   }, [tab, side])
 
@@ -54,7 +55,7 @@ export function AppPage() {
   const ledger = useLedger(series)
   const position = usePosition(series)
   const history = useYtHistory(series, index)
-  const active = tab === 'earn' ? 'earn' : tab === 'portfolio' ? 'portfolio' : 'split'
+  const active = tab === 'earn' ? 'earn' : tab === 'buy' ? 'buy' : tab === 'portfolio' ? 'portfolio' : 'split'
 
   const pick = (i: number) => {
     const q = new URLSearchParams(params.toString())

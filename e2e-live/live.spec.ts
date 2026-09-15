@@ -140,4 +140,20 @@ test.describe.serial('live chain', () => {
     await expect(page.locator('#toast')).toHaveText(/Merged into 1 /, { timeout: 30_000 })
     expect(await pub.readContract({ address: SERIES.underlying, abi: stockAbi, functionName: 'balanceOf', args: [USER] })).toBe(parseEther('995'))
   })
+
+  test('buy pJEPI with ETH: quote from QuoterV2, one exactInput through SwapRouter02', async ({ page }) => {
+    await connect(page)
+    const t = SERIES.ticker
+    await page.click('#tBuy')
+    await expect(first(page, '#inAsset')).toHaveText('ETH')
+    await page.fill('#amt', '0.01') // 0.01 ETH = 0.5 stock → ≈ 0.52 PT at 0.96, less two pool fees
+    await expect(first(page, '#o1')).toHaveText(new RegExp(`^0\\.5[0-2]\\d\\d p${t}$`), { timeout: 30_000 })
+    await expect(first(page, '#route')).toContainText(`ETH → ${t} (0.3%) → p${t}`)
+    await expect(first(page, '#go')).toHaveText(`Buy p${t}`)
+    await page.click('#go')
+    await expect(page.locator('#toast')).toHaveText(new RegExp(`^Bought 0\\.5\\d+ p${t} with 0.01 ETH$`), { timeout: 30_000 })
+    await expect(page.locator('#txlink')).toHaveAttribute('href', /blockscout\.com\/tx\/0x[0-9a-f]{64}$/)
+    // the PT landed in the wallet: 4.99 from before + ≈ 0.5
+    await expect(page.locator('#pos')).toContainText(new RegExp(`p${t}5\\.[45]\\d\\d`)) // 4.99 held before + ≈ 0.52 bought
+  })
 })

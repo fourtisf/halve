@@ -12,7 +12,7 @@
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { deployUniswap } from './lib/uniswap-local.mjs'
+import { deployUniswap, seedWethPool } from './lib/uniswap-local.mjs'
 
 const root = resolve(new URL('..', import.meta.url).pathname)
 const contracts = resolve(root, 'contracts')
@@ -75,7 +75,9 @@ try {
   await rpc('anvil_setCode', [MULTICALL3, mc.deployedBytecode.object])
 
   // real Uniswap v3 pools quoted in the stock token, exactly as on mainnet (the mock pools stay as a fallback)
-  const uni = await deployUniswap(RPC, DEPLOYER_KEY, series.underlying)
+  const uni = await deployUniswap(RPC, DEPLOYER_KEY)
+  // an ETH market for the stock, so the Buy tab can route ETH → stock → PT: 1 ETH = 50 stock
+  const wethPool = await seedWethPool(RPC, DEPLOYER_KEY, { npm: uni.npm, weth: uni.weth, stock: series.underlying, ethAmount: 100n * 10n ** 18n, stockPerEth: 50n * 10n ** 18n })
   sh(bin('forge'), ['script', 'script/CreatePools.s.sol:SeedPools', '--rpc-url', RPC, '--broadcast', '--private-key', DEPLOYER_KEY, '-q'], {
     cwd: contracts, env: { ...process.env, VAULT: series.vault, NPM: uni.npm, OUT: 'pools.local.json' },
   })
@@ -83,7 +85,7 @@ try {
   Object.assign(series, { poolPT: pools.poolPT, poolYT: pools.poolYT })
   const seriesFile = resolve(outDir, 'series.json')
   writeFileSync(seriesFile, JSON.stringify([series], null, 2))
-  console.log(`series ${series.id}: vault ${series.vault}, stock ${series.underlying}, pools ${pools.poolPT} / ${pools.poolYT} (Uniswap v3 ${uni.factory})`)
+  console.log(`series ${series.id}: vault ${series.vault}, stock ${series.underlying}, pools ${pools.poolPT} / ${pools.poolYT}, WETH pool ${wethPool} (Uniswap v3 ${uni.factory}, router ${uni.router}, quoter ${uni.quoter})`)
 
   // 2. site
   const env = {
@@ -91,6 +93,9 @@ try {
     MOCK: 'false',
     NEXT_PUBLIC_MOCK: 'false',
     NEXT_PUBLIC_RPC_URL: RPC,
+    NEXT_PUBLIC_UNISWAP_ROUTER: uni.router,
+    NEXT_PUBLIC_UNISWAP_QUOTER: uni.quoter,
+    NEXT_PUBLIC_WETH: uni.weth,
     SERIES_FILE: seriesFile,
     NEXT_DIST_DIR: '.next-live',
     HISTORY_DIR: resolve(outDir, 'history'),

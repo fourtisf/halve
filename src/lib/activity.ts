@@ -1,6 +1,6 @@
 /** Wallet activity (splits, merges, redemptions) and a simple PnL. Pure; unit-tested. */
 
-export type ActivityAction = 'Split' | 'Merge' | 'Redeem PT' | 'Redeem YT'
+export type ActivityAction = 'Split' | 'Merge' | 'Redeem PT' | 'Redeem YT' | 'Buy'
 
 export type ActivityRow = {
   id: string // series id
@@ -11,6 +11,7 @@ export type ActivityRow = {
   base: number // PT/YT units minted or burned
   txHash?: `0x${string}`
   block?: number
+  note?: string // free text for trades ("0.1 ETH → 2.4 pSPY")
   seq?: number // insertion counter for rows without a block (demo log), so same-second rows keep their order
 }
 
@@ -42,6 +43,7 @@ export function summarizePnl(rows: readonly ActivityRow[], positions: readonly P
   for (const r of rows) {
     const row = byId.get(r.id) ?? { id: r.id, ticker: r.ticker, deposited: 0, withdrawn: 0, holdings: 0, pnl: 0, pnlUsd: 0 }
     if (r.action === 'Split') row.deposited += r.amount
+    else if (r.action === 'Buy') row.deposited += r.amount // paid in stock (or ETH, shown as a note); counts as capital in
     else row.withdrawn += r.amount
     byId.set(r.id, row)
   }

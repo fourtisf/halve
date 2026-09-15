@@ -40,6 +40,7 @@ export function Docs() {
         </tbody>
       </table></div>
       <p>Merge is never gated: not by pool liquidity, not by a held corporate action, not by maturity. That is the guarantee that makes PT + YT always worth at least one share.</p>
+      <p>Trading happens on Uniswap v3: each series has a PT/stock and a YT/stock pool. The app&apos;s Buy tab routes ETH → stock → PT or YT through SwapRouter02 in one transaction, quoted by QuoterV2 across fee tiers; paying with the stock token is a single hop.</p>
 
       <h3 id="maths">Maths</h3>
       <p>Robinhood&apos;s stock tokens follow ERC-8056: the raw <code>balanceOf</code> never changes. Reinvested dividends and splits only move <code>uiMultiplier</code>, and wallets display <em>raw × multiplier</em> shares. Halve therefore accounts in raw tokens, and the accountant splits the multiplier&apos;s history into <code>dividendIndex</code> (D, reinvested dividends) and <code>splitFactor</code> (S, splits), both 1e18 = 1.0.</p>

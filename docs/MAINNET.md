@@ -84,6 +84,14 @@ AMOUNT=1000000000000000000 node scripts/smoke-mainnet.mjs   # split 1 → sell 1
 It stops at the first step that misbehaves. Then walk through split → merge in the UI from a real wallet
 and check the Portfolio activity row links to Blockscout. Repeat per series.
 
+## Buying with ETH
+
+The app's Buy tab routes `ETH → stock → PT/YT` through SwapRouter02, quoting every fee tier of the
+WETH/stock pool and taking the best. It needs a WETH/stock Uniswap v3 pool with liquidity on Robinhood
+Chain (Robinhood's tokens already trade there); when none exists for a series the button reads
+"No ETH → pSPY route yet" and paying with the stock token still works. Addresses come from
+`@uniswap/sdk-core` (`src/lib/chain.ts`); nothing to configure on mainnet.
+
 ## Keeper
 
 Something must call `accountant.sync()` after each multiplier change:

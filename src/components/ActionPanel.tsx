@@ -15,9 +15,10 @@ import { isMatured, isSettled } from '@/lib/stats'
 import { useSplit } from '@/hooks/useSplit'
 import { useMerge } from '@/hooks/useMerge'
 import { useRedeem } from '@/hooks/useRedeem'
+import { useBuy, type PayWith } from '@/hooks/useBuy'
 import { Banner } from './Skeleton'
 
-export type Mode = 'split' | 'merge' | 'earn' | 'redeem'
+export type Mode = 'buy' | 'split' | 'merge' | 'earn' | 'redeem'
 
 type Props = {
   series: Series
@@ -34,6 +35,7 @@ export function ActionPanel({ series, stats, position, mode, onMode }: Props) {
   const t = series.ticker
   const [amt, setAmt] = useState('1')
   const [side, setSide] = useState<'pt' | 'yt'>('pt')
+  const [payWith, setPayWith] = useState<PayWith>('eth')
   const { toast } = useToast()
   const { open } = useWalletModal()
   const { switchChain } = useSwitchChain()
@@ -41,6 +43,7 @@ export function ActionPanel({ series, stats, position, mode, onMode }: Props) {
   const splitH = useSplit(series)
   const mergeH = useMerge(series)
   const redeemH = useRedeem(series, stats.accrued)
+  const buyH = useBuy(series, stats, side, payWith, amt)
 
   const matured = isMatured(series, stats)
   const settled = isSettled(stats) || (matured && stats.isMock)
@@ -52,17 +55,19 @@ export function ActionPanel({ series, stats, position, mode, onMode }: Props) {
   const apy = f(fixedApy * 100, 1)
   const apr = f(earnApr(divYield), 1)
   const wallet = position.connected
-  const balance = mode === 'merge' ? Math.min(position.pt, position.yt) : mode === 'redeem' ? (side === 'pt' ? position.pt : position.yt) : position.stock
-  const inAsset = mode === 'merge' ? `p${t} + y${t}` : mode === 'redeem' ? (side === 'pt' ? `p${t}` : `y${t}`) : t
-  const busy = splitH.busy || mergeH.busy || redeemH.busy
-  const status = mode === 'split' ? splitH.status : mode === 'merge' ? mergeH.status : mode === 'redeem' ? redeemH.status : 'idle'
-  const txHash = mode === 'split' ? splitH.txHash : mode === 'merge' ? mergeH.txHash : mode === 'redeem' ? redeemH.txHash : null
+  const buyToken = `${side === 'pt' ? 'p' : 'y'}${t}`
+  const balance = mode === 'merge' ? Math.min(position.pt, position.yt) : mode === 'redeem' ? (side === 'pt' ? position.pt : position.yt) : mode === 'buy' && payWith === 'eth' ? buyH.ethBalance : position.stock
+  const inAsset = mode === 'merge' ? `p${t} + y${t}` : mode === 'redeem' ? (side === 'pt' ? `p${t}` : `y${t}`) : mode === 'buy' && payWith === 'eth' ? 'ETH' : t
+  const busy = splitH.busy || mergeH.busy || redeemH.busy || buyH.busy
+  const status = mode === 'split' ? splitH.status : mode === 'merge' ? mergeH.status : mode === 'redeem' ? redeemH.status : mode === 'buy' ? buyH.status : 'idle'
+  const txHash = mode === 'split' ? splitH.txHash : mode === 'merge' ? mergeH.txHash : mode === 'redeem' ? redeemH.txHash : mode === 'buy' ? buyH.txHash : null
   const redeemQuote = side === 'pt' ? quoteRedeemPT(a, stats.accrued) : quoteRedeemYT(a, stats.accrued)
 
   // Validation (only once a wallet is connected, so the disconnected state matches the prototype).
   const needsSettle = mode === 'redeem' && !settled
   const invalid = wallet && !position.wrongChain && !needsSettle ? (a <= 0 ? 'Enter an amount' : a > balance ? `Insufficient ${inAsset}` : null) : null
   const splitClosed = mode === 'split' && matured
+  const noRoute = mode === 'buy' && buyH.noRoute
 
   const label = !wallet
     ? 'Connect wallet'
@@ -71,20 +76,26 @@ export function ActionPanel({ series, stats, position, mode, onMode }: Props) {
       : status === 'approving'
         ? `Approve ${inAsset}…`
         : status === 'sending' || status === 'confirming'
-          ? mode === 'split' ? 'Splitting…' : mode === 'merge' ? 'Merging…' : needsSettle ? 'Settling…' : 'Redeeming…'
+          ? mode === 'split' ? 'Splitting…' : mode === 'merge' ? 'Merging…' : mode === 'buy' ? 'Buying…' : needsSettle ? 'Settling…' : 'Redeeming…'
           : splitClosed
             ? 'Series matured · split closed'
             : needsSettle
               ? 'Settle series'
-              : invalid ?? (mode === 'split'
-                ? `Split ${a || 0} ${t}`
-                : mode === 'merge'
-                  ? `Merge into ${a || 0} ${t}`
-                  : mode === 'redeem'
-                    ? `Redeem ${a || 0} ${inAsset}`
-                    : `Provide ${a || 0} ${t}`)
+              : noRoute
+                ? `No ${inAsset} → ${buyToken} route yet`
+                : mode === 'buy' && buyH.quoting
+                  ? 'Fetching quote…'
+                  : invalid ?? (mode === 'split'
+                    ? `Split ${a || 0} ${t}`
+                    : mode === 'merge'
+                      ? `Merge into ${a || 0} ${t}`
+                      : mode === 'redeem'
+                        ? `Redeem ${a || 0} ${inAsset}`
+                        : mode === 'buy'
+                          ? `Buy ${buyToken}`
+                          : `Provide ${a || 0} ${t}`)
 
-  const disabled = busy || !!invalid || splitClosed
+  const disabled = busy || !!invalid || splitClosed || noRoute || (mode === 'buy' && (buyH.quoting || buyH.amountOut <= 0))
 
   const go = async () => {
     if (!wallet) return open()
@@ -92,6 +103,7 @@ export function ActionPanel({ series, stats, position, mode, onMode }: Props) {
     if (mode === 'split') return splitH.split(amt)
     if (mode === 'merge') return mergeH.merge(amt)
     if (mode === 'redeem') return needsSettle ? redeemH.settle() : redeemH.redeem(side, amt)
+    if (mode === 'buy') return buyH.buy()
     // Earn — phase 1 is quote only; the router is phase 2.
     if (position.isMock) {
       if (a <= 0) return
@@ -103,7 +115,9 @@ export function ActionPanel({ series, stats, position, mode, onMode }: Props) {
   }
 
   const sideNote =
-    mode === 'split'
+    mode === 'buy'
+      ? `Swaps on Uniswap v3 in one transaction${payWith === 'eth' ? `: ETH → ${t} → ${buyToken}` : ''}. Slippage 1%. You can always merge p${t} + y${t} back into ${t}, or sell either one the same way.`
+      : mode === 'split'
       ? `Keep both and nothing changes. Sell y${t} to lock ${apy}% fixed. Sell p${t} to own only the dividends.`
       : mode === 'merge'
         ? 'Free, always. Works before and after maturity and never depends on pool liquidity.'
@@ -116,12 +130,23 @@ export function ActionPanel({ series, stats, position, mode, onMode }: Props) {
   return (
     <div className="panel">
       <div className="seg">
+        <button className={mode === 'buy' ? 'on' : undefined} id="tBuy" onClick={() => onMode('buy')}>Buy</button>
         <button className={mode === 'split' ? 'on' : undefined} id="tSplit" onClick={() => onMode('split')}>Split</button>
         <button className={mode === 'merge' ? 'on' : undefined} id="tMerge" onClick={() => onMode('merge')}>Merge</button>
         <button className={mode === 'earn' ? 'on' : undefined} id="tEarn" onClick={() => onMode('earn')}>Earn</button>
         {matured && <button className={mode === 'redeem' ? 'on' : undefined} id="tRedeem" onClick={() => onMode('redeem')}>Redeem</button>}
       </div>
       {matured && mode !== 'redeem' && <Banner kind="y">Series matured · {settled ? 'redemption open' : 'awaiting settle()'}</Banner>}
+      {mode === 'buy' && (<>
+        <div className="side-sel" id="buySide">
+          <button className={side === 'pt' ? 'on' : undefined} onClick={() => setSide('pt')}>Buy p{t}</button>
+          <button className={side === 'yt' ? 'on' : undefined} onClick={() => setSide('yt')}>Buy y{t}</button>
+        </div>
+        <div className="side-sel" id="payWith">
+          <button className={payWith === 'eth' ? 'on' : undefined} onClick={() => setPayWith('eth')}>Pay with ETH</button>
+          <button className={payWith === 'stock' ? 'on' : undefined} onClick={() => setPayWith('stock')}>Pay with {t}</button>
+        </div>
+      </>)}
       {mode === 'redeem' && (
         <div className="side-sel" id="redeemSide">
           <button className={side === 'pt' ? 'on' : undefined} onClick={() => setSide('pt')}>p{t}</button>
@@ -130,7 +155,7 @@ export function ActionPanel({ series, stats, position, mode, onMode }: Props) {
       )}
       <div className="fld">
         <label>
-          <span id="inLbl">{mode === 'split' ? 'You deposit' : mode === 'merge' ? 'You merge' : mode === 'redeem' ? 'You redeem' : 'You provide'}</span>
+          <span id="inLbl">{mode === 'split' ? 'You deposit' : mode === 'merge' ? 'You merge' : mode === 'redeem' ? 'You redeem' : mode === 'buy' ? 'You pay' : 'You provide'}</span>
           <span>Balance <span className="mono" id="bal">{f(wallet ? balance : 0, 2)}</span> <button type="button" onClick={() => setAmt(wallet ? trim(balance) : '0')}>Max</button></span>
         </label>
         <div className="in">
@@ -154,6 +179,9 @@ export function ActionPanel({ series, stats, position, mode, onMode }: Props) {
         {mode === 'redeem' && (
           <div className="fld" style={{ gridColumn: '1/-1' }}><label>You receive</label><div className="v" id="o1">{f(redeemQuote.out, 4)} {t}</div></div>
         )}
+        {mode === 'buy' && (
+          <div className={`fld ${side === 'pt' ? 'p' : 'y'}`} style={{ gridColumn: '1/-1' }}><label>You receive{buyH.quoting ? ' · quoting' : ''}</label><div className="v" id="o1">{buyH.amountOut > 0 ? `${f(buyH.amountOut, 4)} ${buyToken}` : `— ${buyToken}`}</div></div>
+        )}
       </div>
       <div className="meta" id="meta">
         {mode === 'split' && (<>
@@ -170,6 +198,11 @@ export function ActionPanel({ series, stats, position, mode, onMode }: Props) {
           <div><span>Pared</span><b>{f(n * 0.5, 3)} {t}</b></div>
           <div><span>Ranges</span><b>{EARN_TIERS.pt} tier · {EARN_TIERS.yt} tier</b></div>
           <div><span>Est. APR</span><b className="g">{apr}%</b></div>
+        </>)}
+        {mode === 'buy' && (<>
+          <div><span>Route</span><b id="route">{buyH.routeLabel ?? '—'}</b></div>
+          <div><span>Min. received (1% slippage)</span><b>{f(buyH.minOut, 4)} {buyToken}</b></div>
+          <div><span>Value now</span><b>${f(buyH.amountOut * (side === 'pt' ? stats.ptPrice : ytPrice) * px, 2)}</b></div>
         </>)}
         {mode === 'redeem' && (<>
           <div><span>Fee</span><b>{side === 'pt' ? '0 · free' : `${f(redeemQuote.fee, 4)} ${t} (5%)`}</b></div>

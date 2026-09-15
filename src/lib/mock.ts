@@ -34,6 +34,8 @@ export const MOCK_SERIES: MockSeries[] = [
 ]
 
 export const MOCK_BALANCE = 12.4
+/** Demo ETH price for the Buy tab (USD). */
+export const MOCK_ETH_USD = 4_000
 export const MOCK_START_BLOCK = 4_812_337
 export const MOCK_DIVIDENDS_DISTRIBUTED = 412_000
 export const MOCK_TVL_CHANGE_7D = 8.1

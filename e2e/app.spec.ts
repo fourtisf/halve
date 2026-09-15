@@ -41,6 +41,31 @@ test.describe('/app (mock mode)', () => {
     await expect(page.locator('#tRedeem')).toHaveCount(0) // not matured
   })
 
+  test('buy tab: quotes PT/YT for ETH or the stock and the demo wallet can buy', async ({ page }) => {
+    await page.goto('/app?s=1&tab=buy')
+    await expect(page.locator('#tBuy')).toHaveClass(/on/)
+    await expect(page.locator('.appbar a.on')).toHaveText('Buy')
+    await expect(text(page, '#inLbl')).toHaveText('You pay')
+    await expect(text(page, '#inAsset')).toHaveText('ETH')
+    await page.fill('#amt', '0.1')
+    // 0.1 ETH × $4,000 / $28.90 = 13.841 SCHD → / 0.9587 PT price × (1 − 0.3 % fee)
+    await expect(text(page, '#o1')).toHaveText(/^14\.39\d\d pSCHD$/)
+    await expect(text(page, '#route')).toHaveText('ETH → SCHD → pSCHD')
+    await page.locator('#buySide button', { hasText: 'Buy ySCHD' }).click()
+    await expect(text(page, '#o1')).toHaveText(/ySCHD$/)
+    await page.locator('#payWith button', { hasText: 'Pay with SCHD' }).click()
+    await expect(text(page, '#inAsset')).toHaveText('SCHD')
+    await page.fill('#amt', '1')
+    await expect(text(page, '#o1')).toHaveText(/^24\.1\d\d\d ySCHD$/) // 1 / 0.0413 × 0.997
+    await expect(text(page, '#go')).toHaveText('Connect wallet')
+    await page.click('#wbtn')
+    await page.click('#wdemo')
+    await expect(text(page, '#go')).toHaveText('Buy ySCHD')
+    await page.click('#go')
+    await expect(page.locator('#toast')).toHaveText(/^Bought 24\.1\d+ ySCHD with 1 SCHD$/)
+    await expect(page.locator('#pos')).toContainText('ySCHD')
+  })
+
   test('url params pick tab and side', async ({ page }) => {
     await page.goto('/app?tab=earn')
     await expect(page.locator('#tEarn')).toHaveClass(/on/)
