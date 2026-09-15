@@ -149,13 +149,13 @@ const web = `${BASE}
  * public/brand, and posts carry the visuals. 4:5 (1080×1350) gets the most feed space; 1:1 for reuse.
  * Same premium layers as the X headers: dot grid, light sweep, grain, glass panels, a faint watermark.
  */
-const card = (w, h, kicker, body, s = 1) => `${BASE}
+const card = (w, h, kicker, body, s = 1, watermark = true) => `${BASE}
 <div class="frame" style="width:${w}px;height:${h}px;display:flex;flex-direction:column;padding:${68 * s}px ${80 * s}px ${56 * s}px">
   <div class="glow" style="left:-260px;top:-360px;width:1100px;height:1000px;background:radial-gradient(closest-side,rgba(232,193,112,.13),transparent 70%)"></div>
   <div class="glow" style="right:-300px;bottom:-380px;width:900px;height:900px;background:radial-gradient(closest-side,rgba(232,193,112,.09),transparent 70%)"></div>
   <div class="dots" style="--mx:50%;--my:38%"></div>
   <div class="sweep"></div>
-  <div style="position:absolute;right:${80 * s}px;bottom:${118 * s}px;opacity:.07">${MARK(200 * s)}</div>
+  ${watermark ? `<div style="position:absolute;right:${80 * s}px;bottom:${118 * s}px;opacity:.07">${MARK(200 * s)}</div>` : ''}
   <div style="display:flex;justify-content:space-between;align-items:center;position:relative;padding-bottom:${26 * s}px;border-bottom:1px solid rgba(255,255,255,.09)">
     <div class="lockup" style="position:static;font-size:${26 * s}px">${MARK(32 * s)}Halve</div>
     <div class="mono" style="font-size:${13 * s}px;letter-spacing:.18em;color:var(--fg3)">${kicker}</div>
@@ -324,6 +324,68 @@ const headerC = `${BASE}
   ${GRAIN}
 </div>`
 
+
+/**
+ * Website series: real screenshots of the running site inside a browser mockup, one page per banner.
+ * Needs the site up (SITE_URL, default http://127.0.0.1:3000, e.g. `pnpm start`); skipped otherwise.
+ */
+const SITE = process.env.SITE_URL ?? 'http://127.0.0.1:3000'
+const PAGES = [
+  { key: 'home', path: '/', url: 'halve.finance', ready: '.hero h1' },
+  { key: 'app', path: '/app?s=1', url: 'halve.finance/app', ready: '#kApy' },
+  { key: 'oracle', path: '/oracle', url: 'halve.finance/oracle', ready: '#orc tr' },
+  { key: 'docs', path: '/docs', url: 'halve.finance/docs', ready: '#ctable' },
+]
+async function captureSite(browser) {
+  try { await fetch(SITE) } catch { console.log(`site not reachable at ${SITE}: skipping the website series`); return null }
+  const shots = {}
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 })
+  for (const pg of PAGES) {
+    await page.goto(SITE + pg.path, { waitUntil: 'networkidle' })
+    await page.waitForSelector(pg.ready)
+    await page.addStyleTag({ content: '::-webkit-scrollbar{display:none}' })
+    await page.waitForTimeout(400)
+    shots[pg.key] = 'data:image/png;base64,' + (await page.screenshot({ type: 'png' })).toString('base64')
+  }
+  await page.close()
+  return shots
+}
+
+const browserFrame = (src, url, w) => {
+  const bar = Math.round(w * 0.042)
+  return `<div class="glass" style="border-radius:${Math.round(w * 0.018)}px;overflow:hidden;width:${w}px;box-shadow:0 60px 120px rgba(0,0,0,.7),0 0 90px rgba(232,193,112,.10),inset 0 1px 0 rgba(255,255,255,.06)">
+  <div style="height:${bar}px;display:flex;align-items:center;gap:${bar * .2}px;padding:0 ${bar * .45}px;border-bottom:1px solid rgba(255,255,255,.08);background:#0E0E0E">
+    <i style="width:${bar * .26}px;height:${bar * .26}px;border-radius:50%;background:#2A2A2A;display:block"></i><i style="width:${bar * .26}px;height:${bar * .26}px;border-radius:50%;background:#2A2A2A;display:block"></i><i style="width:${bar * .26}px;height:${bar * .26}px;border-radius:50%;background:#2A2A2A;display:block"></i>
+    <div class="mono" style="margin-left:${bar * .4}px;flex:1;height:${bar * .62}px;border-radius:${bar * .2}px;background:#161616;border:1px solid rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-size:${bar * .3}px;color:var(--fg2)"><span style="color:var(--green);margin-right:${bar * .18}px">●</span>${url}</div>
+  </div>
+  <img src="${src}" style="display:block;width:${w}px;height:${Math.round(w * 900 / 1440)}px;object-fit:cover;object-position:top">
+</div>`
+}
+
+const WEB = {
+  home: { kicker: 'Introducing', h1: 'Meet halve.finance', p: 'Fixed yield and dividend tokens for tokenized stocks, live on Robinhood Chain. Split a share into the share at a discount and every dividend it pays until a fixed date. Merge back any time, free.' },
+  app: { kicker: 'The app', h1: 'Split, hold, merge.<br>One screen.', p: 'Pick a series, read the PT price, the YT price and the dividend ledger straight from chain, then split in one transaction. Merge back is always open and always free.' },
+  oracle: { kicker: 'Dividend oracle', h1: 'The feed that knows a split from a payout.', p: 'One accountant per stock token classifies every corporate action by rule, on-chain. Anything ambiguous waits two days in public. Free for any protocol to read.' },
+  docs: { kicker: 'Docs · Open source', h1: 'Read the contracts before you trust them.', p: 'Lifecycle, maths, fees, addresses, the accountant rules and the HTTP API on one page. No audit yet, and the page says so.' },
+}
+
+function websiteWide(key, shots, n) {
+  const c = WEB[key]
+  const url = PAGES.find((p) => p.key === key).url
+  return wideCard(`0${n} / 04 · WEBSITE`, `<div class="kicker">${c.kicker}</div><h1 style="font-size:${key === 'home' ? 88 : 72}px;margin:22px 0 20px">${c.h1}</h1><p style="font-size:23px;max-width:700px;color:#9A9A9A">${c.p}</p><div style="display:flex;gap:12px;margin-top:36px"><div class="btn btn-white" style="height:54px;padding:0 24px;font-size:17px">${url} →</div><div class="btn btn-line mono" style="height:54px;padding:0 22px;font-size:15px">@Halvefinance</div></div>`, browserFrame(shots[key], url, 860))
+}
+
+function websiteTall(key, shots, n, w, h, s) {
+  const c = WEB[key]
+  const url = PAGES.find((p) => p.key === key).url
+  const body = `<div style="display:flex;flex-direction:column;gap:${40 * s}px">
+    ${browserFrame(shots[key], url, w - 160 * s)}
+    <div><div class="kicker" style="font-size:${13 * s}px">${c.kicker}</div><h1 style="font-size:${(key === 'home' ? 76 : 62) * s}px;margin:${18 * s}px 0 ${16 * s}px">${c.h1}</h1><p style="font-size:${22 * s}px;color:#9A9A9A;max-width:${880 * s}px">${c.p}</p>
+    <div style="display:flex;gap:${12 * s}px;margin-top:${28 * s}px"><div class="btn btn-white" style="height:${52 * s}px;padding:0 ${22 * s}px;font-size:${17 * s}px">${url} →</div><div class="btn btn-line mono" style="height:${52 * s}px;padding:0 ${20 * s}px;font-size:${15 * s}px">@Halvefinance</div></div></div>
+  </div>`
+  return card(w, h, `0${n} / 04 · WEBSITE`, body, s, false)
+}
+
 const jobs = [
   { name: 'halve-x-header-premium-1500x500.png', html: header, w: 1500, h: 500, scale: 1 },
   { name: 'halve-x-header-premium-3000x1000.png', html: header, w: 1500, h: 500, scale: 2 },
@@ -342,6 +404,13 @@ const jobs = [
 ]
 
 const browser = await chromium.launch()
+const shots = await captureSite(browser)
+if (shots) {
+  PAGES.forEach((pg, i) => {
+    jobs.push({ name: `halve-web-0${i + 1}-${pg.key}-1920x1080.png`, html: websiteWide(pg.key, shots, i + 1), w: 1920, h: 1080, scale: 1 })
+    jobs.push({ name: `halve-web-0${i + 1}-${pg.key}-1080x1350.png`, html: websiteTall(pg.key, shots, i + 1, 1080, 1350, 1), w: 1080, h: 1350, scale: 1 })
+  })
+}
 for (const j of jobs) {
   const page = await browser.newPage({ viewport: { width: j.w, height: j.h }, deviceScaleFactor: j.scale })
   await page.setContent(j.html, { waitUntil: 'networkidle' })

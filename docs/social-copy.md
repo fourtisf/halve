@@ -96,3 +96,34 @@ order. 500 characters max per post, no hashtags needed.
 
 If the Threads handle is not @Halvefinance, change the label in `scripts/render-banners.mjs`
 (`Threads · @Halvefinance`) and re-render.
+
+## Website series (X and Threads, 16:9 `halve-web-0N-*-1920x1080.png` or 4:5 `-1080x1350.png`)
+
+Real screenshots of the site in a browser frame, one page per post. Re-render after mainnet so the
+numbers in the screenshots are live ones (`pnpm start`, then `SITE_URL=http://127.0.0.1:3000 node scripts/render-banners.mjs`).
+
+**01 · Introducing** (`halve-web-01-home`)
+
+> Meet halve.finance.
+>
+> Fixed yield and dividend tokens for tokenized stocks, live on Robinhood Chain. Split a share into the share at a discount and every dividend it pays until a fixed date. Merge back any time, free.
+>
+> halve.finance
+
+**02 · The app** (`halve-web-02-app`)
+
+> One screen. Pick a series, read the PT price, the YT price and the dividend ledger straight from chain, then split in one transaction. Merge back is always open and always free.
+>
+> halve.finance/app
+
+**03 · Dividend oracle** (`halve-web-03-oracle`)
+
+> The feed that knows a split from a payout. One accountant per stock token classifies every corporate action by rule, on-chain. Anything ambiguous waits two days in public. Free for any protocol to read.
+>
+> halve.finance/oracle
+
+**04 · Docs** (`halve-web-04-docs`)
+
+> Read the contracts before you trust them. Lifecycle, maths, fees, addresses, the accountant rules and the HTTP API on one page. No audit yet, and the page says so.
+>
+> halve.finance/docs
