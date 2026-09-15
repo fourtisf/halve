@@ -9,7 +9,11 @@ test('mobile: menu toggles links, app layout stacks, markets table scrolls', asy
   expect(hero!.y).toBeGreaterThanOrEqual(panel!.y + panel!.height) // menu pushes content down, never overlaps it
   await expect(page.locator('#mobilelinks a.xlink')).toHaveAttribute('href', 'https://x.com/Halvefinance')
   await expect(page.locator('#xnav')).toBeHidden() // icon button is desktop-only; the menu carries the link on phones
-  await page.locator('#mobilelinks a', { hasText: 'App' }).click()
+  await expect(page.locator('nav .nav-launch')).toBeHidden() // launch moves into the menu so the wordmark and wallet button never overlap
+  await expect(page.locator('#mobilelinks a.launch')).toHaveAttribute('href', '/app')
+  const [logo, wallet] = await Promise.all([page.locator('nav .logo').boundingBox(), page.locator('#wbtn').boundingBox()])
+  expect(wallet!.x).toBeGreaterThanOrEqual(logo!.x + logo!.width)
+  await page.locator('#mobilelinks a', { hasText: /^App$/ }).click()
   await page.waitForURL(/\/app/)
   await expect(page.locator('#mobilelinks')).toBeHidden()
   const [left, right] = await Promise.all([page.locator('.applay > div').nth(0).boundingBox(), page.locator('.applay > div').nth(1).boundingBox()])

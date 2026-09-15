@@ -192,7 +192,7 @@ a.wopt{color:inherit}
 .mobile-links .wrap{display:grid;height:auto;gap:2px;padding:8px 24px}
 .mobile-links a{font-size:14px;color:var(--fg2);padding:10px 12px;border-radius:8px}.mobile-links a.on{color:var(--fg);background:var(--bg2)}
 @media (max-width:900px){.menu-btn{display:inline-flex}.mobile-links.open{display:block}.btn.xbtn{display:none}}
-@media (max-width:640px){.announce span{display:none}}
+@media (max-width:640px){.announce span{display:none}nav .nav-launch{display:none}.mobile-links a.launch{color:var(--fg);font-weight:500}}
 /* keyboard-focusable market rows */
 tbody tr:focus-visible{outline:2px solid #fff;outline-offset:-2px}
 /* portfolio */

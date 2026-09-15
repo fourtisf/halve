@@ -42,6 +42,7 @@ export function Nav() {
       {NAV.map((l) => <Link key={l.href} href={l.href} className={pathname === l.href ? 'on' : cls}>{l.label}</Link>)}
       {isExternal(LINKS.docs) ? <a href={LINKS.docs} {...externalProps(LINKS.docs)}>Docs</a> : <Link href={LINKS.docs} className={pathname === LINKS.docs ? 'on' : cls}>Docs</Link>}
       {mobile && <a href={LINKS.x} target="_blank" rel="noopener noreferrer" className="xlink"><XIcon size={12} />{X_HANDLE} ↗</a>}
+      {mobile && <Link href="/app" className="launch">Launch app →</Link>}
     </>
   )
   return (
@@ -52,7 +53,7 @@ export function Nav() {
         <div style={{ display: 'flex', gap: 8 }}>
           <a className="btn btn-line xbtn" id="xnav" href={LINKS.x} target="_blank" rel="noopener noreferrer" aria-label={`Halve on X (${X_HANDLE})`} title={X_HANDLE}><XIcon size={14} /></a>
           <WalletNavButton />
-          <Link className="btn btn-white" href="/app">Launch app</Link>
+          <Link className="btn btn-white nav-launch" href="/app">Launch app</Link>
           <button className="menu-btn" id="menubtn" aria-label="Menu" aria-expanded={menu} aria-controls="mobilelinks" onClick={() => setMenu((m) => !m)}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
               {menu ? <><path d="M3 3l10 10" /><path d="M13 3L3 13" /></> : <><path d="M2 4h12" /><path d="M2 8h12" /><path d="M2 12h12" /></>}
