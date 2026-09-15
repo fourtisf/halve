@@ -18,7 +18,7 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { createPublicClient, formatEther, http, parseAbi } from 'viem'
+import { createPublicClient, formatEther, http, isAddress, parseAbi } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 
 const root = resolve(new URL('..', import.meta.url).pathname)
@@ -57,6 +57,12 @@ const ok = (l, v) => console.log(`  ✓ ${l}${v !== undefined ? `  → ${v}` : '
 const bad = (l, e) => { failures++; console.log(`  ✗ ${l}  → ${e?.shortMessage ?? e?.message ?? e}`) }
 
 console.log(`\nPreflight on ${RPC}${dryRun ? ' (dry run)' : ''}`)
+// addresses first, so a placeholder left in .env.mainnet is named instead of surfacing as an RPC error
+for (const [k, v, optional] of [['STOCK', STOCK], ['TREASURY', TREASURY], ['GUARDIAN', GUARDIAN], ['OWNER', OWNER], ['PRICE_FEED', PRICE_FEED, true], ['NPM', NPM, true], ['WSTOCK', env.WSTOCK ?? '', true], ['ACCOUNTANT', env.ACCOUNTANT ?? '', true]]) {
+  if (optional && !v) continue
+  if (isAddress(v)) ok(`${k} is an address`, v); else bad(k, `not a valid address: "${v}" (edit .env.mainnet)`)
+}
+if (failures) { console.error(`\n${failures} value(s) in .env.mainnet are wrong; nothing deployed.`); process.exit(1) }
 try {
   const id = await client.getChainId()
   if (id === CHAIN_ID) ok('chain id', id); else bad('chain id', `${id}, expected ${CHAIN_ID}`)
