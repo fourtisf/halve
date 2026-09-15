@@ -19,3 +19,13 @@ test('mobile: menu toggles links, app layout stacks, markets table scrolls', asy
   const bodyOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)
   expect(bodyOverflow).toBe(false)
 })
+
+test('mobile without an extension offers "open in wallet app" deep links', async ({ page }) => {
+  await page.goto('/app')
+  await page.click('#wbtn')
+  const apps = page.locator('#wapps a')
+  await expect(apps).toHaveCount(5)
+  await expect(page.locator('#wapps a[data-app="metamask"]')).toHaveAttribute('href', /metamask\.app\.link\/dapp\/localhost:3000\/app/)
+  await expect(page.locator('#wapps a[data-app="trust"]')).toHaveAttribute('href', /link\.trustwallet\.com\/open_url\?coin_id=60&url=/)
+  await expect(page.locator('#wapps a[data-app="coinbase"]')).toHaveAttribute('href', /go\.cb-w\.com\/dapp\?cb_url=/)
+})

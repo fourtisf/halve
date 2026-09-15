@@ -1,11 +1,12 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { WalletButton } from '@rainbow-me/rainbowkit'
-import { useAccount, useConnect, useConnectors } from 'wagmi'
+import { useAccount, useConnect, useConnectors, type Connector } from 'wagmi'
 import { useWalletModal } from '@/lib/walletModal'
 import { shortError, useToast } from '@/lib/toast'
 import { CHAIN_ID, DEMO_CONNECTOR_ID } from '@/lib/wagmi'
 import { HAS_WALLETCONNECT, MOCK } from '@/lib/env'
+import { RDNS_TO_WALLET, WALLET_APP_LINKS, isCoarsePointer } from '@/lib/walletLinks'
 import { HalveMark } from './Logo'
 
 /** RainbowKit wallet ids (matched case-insensitively by WalletButton), in display order. */
@@ -20,10 +21,13 @@ const WALLETS: { id: string; label: string }[] = [
   { id: 'binance', label: 'Binance Wallet' },
   ...(HAS_WALLETCONNECT ? [{ id: 'walletConnect', label: 'WalletConnect' }] : []),
 ]
+/** Wallets whose own SDK handles the not-installed / mobile case without WalletConnect. */
+const SDK_WALLETS = new Set(['metaMask', 'coinbase', 'walletConnect'])
 
 const FOCUSABLE = 'button:not([disabled]), a[href], input, [tabindex]:not([tabindex="-1"])'
-
 type IconSrc = string | (() => Promise<string>) | undefined
+type RkDetails = { iconUrl?: IconSrc; iconBackground?: string; downloadUrls?: { browserExtension?: string; chrome?: string; firefox?: string; qrCode?: string; mobile?: string } }
+const rk = (c: Connector | undefined) => (c as unknown as { rkDetails?: RkDetails } | undefined)?.rkDetails
 
 /** RainbowKit ships wallet icons as data URLs, sometimes behind an async loader. */
 function WalletIcon({ src, bg }: { src: IconSrc; bg?: string }) {
@@ -41,7 +45,13 @@ function WalletIcon({ src, bg }: { src: IconSrc; bg?: string }) {
   )
 }
 
-/** Prototype-styled wallet picker; each option connects through RainbowKit's connector for that wallet. */
+function Option({ id, icon, bg, label, status, disabled, onClick, href }: { id: string; icon?: IconSrc; bg?: string; label: string; status: string; disabled?: boolean; onClick?: () => void; href?: string }) {
+  const inner = <><WalletIcon src={icon} bg={bg} /><span className="wname">{label}<small>{status}</small></span></>
+  if (href) return <a className="wopt" data-wallet={id} href={href} target="_blank" rel="noopener noreferrer">{inner}</a>
+  return <button className="wopt" data-wallet={id} disabled={disabled} onClick={onClick}>{inner}</button>
+}
+
+/** Prototype-styled wallet picker. Every path here works without a WalletConnect project id. */
 export function WalletModal() {
   const { isOpen, close } = useWalletModal()
   const { toast } = useToast()
@@ -49,9 +59,9 @@ export function WalletModal() {
   const connectors = useConnectors()
   const { connectAsync } = useConnect()
   const [pending, setPending] = useState<string | null>(null)
+  const [env, setEnv] = useState({ injected: false, mobile: false, url: '' })
   const box = useRef<HTMLDivElement>(null)
   const restore = useRef<HTMLElement | null>(null)
-  const demo = MOCK ? connectors.find((c) => c.id === DEMO_CONNECTOR_ID) : undefined
 
   useEffect(() => {
     if (!isConnected || !isOpen) return
@@ -60,18 +70,16 @@ export function WalletModal() {
     setPending(null)
   }, [isConnected, isOpen, pending, close, toast])
 
-  // Generic browser wallet: shown only when something is injected (decided after hydration).
-  const [hasInjected, setHasInjected] = useState(false)
-  useEffect(() => { setHasInjected(typeof window !== 'undefined' && !!(window as { ethereum?: unknown }).ethereum) }, [isOpen])
-  const injected = connectors.find((c) => c.id === 'injected')
-  const injectedDetails = (injected as unknown as { rkDetails?: { iconUrl?: IconSrc; iconBackground?: string } } | undefined)?.rkDetails
+  // Browser facts, decided after hydration so SSR and the first client render match.
+  useEffect(() => {
+    setEnv({ injected: !!(window as { ethereum?: unknown }).ethereum, mobile: isCoarsePointer(), url: window.location.href })
+  }, [isOpen])
 
   // Focus trap: focus the first option on open, keep Tab inside the box, restore focus on close.
   useEffect(() => {
     if (!isOpen) return
     restore.current = document.activeElement as HTMLElement | null
-    const first = box.current?.querySelector<HTMLElement>(FOCUSABLE)
-    first?.focus()
+    box.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus()
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') return close()
       if (e.key !== 'Tab' || !box.current) return
@@ -82,16 +90,42 @@ export function WalletModal() {
       else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus() }
     }
     window.addEventListener('keydown', onKey)
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      restore.current?.focus?.()
-    }
+    return () => { window.removeEventListener('keydown', onKey); restore.current?.focus?.() }
   }, [isOpen, close])
+
+  const demo = MOCK ? connectors.find((c) => c.id === DEMO_CONNECTOR_ID) : undefined
+  const generic = connectors.find((c) => c.id === 'injected')
+  /** Wallets announced by the browser via EIP-6963 that have no dedicated entry above. */
+  const discovered = useMemo(
+    () => connectors.filter((c) => c.type === 'injected' && !rk(c) && c.id !== 'injected' && !RDNS_TO_WALLET[c.id]),
+    [connectors],
+  )
+
+  const connectWith = async (label: string, connector: Connector) => {
+    setPending(label)
+    try { await connectAsync({ connector, chainId: CHAIN_ID }) } catch (e) { setPending(null); toast(shortError(e)) }
+  }
 
   return (
     <div className={'modal' + (isOpen ? ' open' : '')} id="wmodal" onClick={(e) => { if (e.target === e.currentTarget) close() }} role="dialog" aria-modal="true" aria-label="Connect a wallet" aria-hidden={!isOpen}>
       <div className="box" ref={box}>
         <h3>Connect a wallet</h3>
+
+        {(discovered.length > 0 || (env.injected && generic && discovered.length === 0)) && (
+          <>
+            <div className="wsec">Detected in your browser</div>
+            <div className="wgrid" id="wdetected">
+              {discovered.map((c) => (
+                <Option key={c.id} id={c.id} icon={c.icon} bg="#fff" label={c.name} status={pending === c.name ? 'Connecting…' : 'Installed'} disabled={pending === c.name} onClick={() => connectWith(c.name, c)} />
+              ))}
+              {discovered.length === 0 && env.injected && generic && (
+                <Option id="injected" icon={rk(generic)?.iconUrl} bg={rk(generic)?.iconBackground} label="Browser wallet" status={pending === 'Browser wallet' ? 'Connecting…' : 'Installed'} disabled={pending === 'Browser wallet'} onClick={() => connectWith('Browser wallet', generic)} />
+              )}
+            </div>
+          </>
+        )}
+
+        <div className="wsec">Wallets</div>
         <div className="wgrid">
           {WALLETS.map((w) => (
             <WalletButton.Custom key={w.id} wallet={w.id}>
@@ -99,55 +133,52 @@ export function WalletModal() {
                 if (!connector) return null
                 const installed = connector.installed === true
                 const busy = loading || pending === w.label
+                const canConnect = installed || SDK_WALLETS.has(w.id)
+                const download = connector.extensionDownloadUrl ?? connector.downloadUrls?.browserExtension ?? connector.downloadUrls?.qrCode
+                if (!canConnect && download) {
+                  return <Option id={w.id} icon={connector.iconUrl as IconSrc} bg={connector.iconBackground} label={w.label} status="Get extension" href={download} />
+                }
                 return (
-                  <button
-                    className="wopt"
-                    data-wallet={w.id}
+                  <Option
+                    id={w.id}
+                    icon={connector.iconUrl as IconSrc}
+                    bg={connector.iconBackground}
+                    label={w.label}
+                    status={busy ? 'Connecting…' : installed ? 'Installed' : w.id === 'walletConnect' ? 'Scan with any wallet' : 'Connect'}
                     disabled={busy}
                     onClick={async () => {
                       setPending(w.label)
                       try { await connect() } catch (e) { setPending(null); toast(shortError(e)) }
-                      // Not installed: RainbowKit opened its own QR / download flow; clear our pending state.
-                      if (!installed) setPending(null)
+                      if (!installed) setPending(null) // the wallet's own SDK / QR flow took over
                     }}
-                  >
-                    <WalletIcon src={connector.iconUrl as IconSrc} bg={connector.iconBackground} />
-                    <span className="wname">{w.label}<small>{busy ? 'Connecting…' : installed ? 'Installed' : connector.id === 'walletConnect' ? 'Scan with any wallet' : 'Get'}</small></span>
-                  </button>
+                  />
                 )
               }}
             </WalletButton.Custom>
           ))}
-          {hasInjected && injected && (
-            <button
-              className="wopt"
-              data-wallet="injected"
-              disabled={pending === 'Browser wallet'}
-              onClick={async () => {
-                setPending('Browser wallet')
-                try { await connectAsync({ connector: injected, chainId: CHAIN_ID }) } catch (e) { setPending(null); toast(shortError(e)) }
-              }}
-            >
-              <WalletIcon src={injectedDetails?.iconUrl} bg={injectedDetails?.iconBackground} />
-              <span className="wname">Browser wallet<small>{pending === 'Browser wallet' ? 'Connecting…' : 'Installed'}</small></span>
-            </button>
-          )}
           {demo && (
-            <button
-              className="wopt"
-              id="wdemo"
-              data-wallet="demo"
-              onClick={async () => {
-                setPending('Demo wallet')
-                try { await connectAsync({ connector: demo, chainId: CHAIN_ID }) } catch (e) { setPending(null); toast(shortError(e)) }
-              }}
-            >
+            <button className="wopt" id="wdemo" data-wallet="demo" disabled={pending === 'Demo wallet'} onClick={() => connectWith('Demo wallet', demo)}>
               <span className="wicon" style={{ background: '#000' }} aria-hidden="true"><HalveMark size={18} /></span>
               <span className="wname">Demo wallet<small>mock mode · no extension needed</small></span>
             </button>
           )}
         </div>
-        <div className="note">Network: Robinhood Chain ({CHAIN_ID}). You&apos;ll be asked to add or switch to it after connecting.{!HAS_WALLETCONNECT && ' Mobile wallets via WalletConnect are coming soon; use a browser extension for now.'}</div>
+
+        {env.mobile && !env.injected && env.url && (
+          <>
+            <div className="wsec">On your phone? Open this page in your wallet app</div>
+            <div className="wgrid" id="wapps">
+              {WALLET_APP_LINKS.map((l) => (
+                <a key={l.id} className="wopt" data-app={l.id} href={l.href(env.url)} rel="noopener noreferrer">
+                  <span className="wicon" style={{ background: 'var(--line2)' }} aria-hidden="true">↗</span>
+                  <span className="wname">{l.label}<small>opens halve.finance inside the app</small></span>
+                </a>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div className="note">Network: Robinhood Chain ({CHAIN_ID}). You&apos;ll be asked to add or switch to it after connecting.</div>
       </div>
     </div>
   )

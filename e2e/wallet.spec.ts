@@ -58,10 +58,29 @@ test.describe('real wallet connection path (fake injected provider)', () => {
     await expect(page.locator('#wbtn')).toHaveText('0x1111…1111')
   })
 
-  test('without any extension the browser-wallet option is hidden and other wallets say Get', async ({ page }) => {
+  test('without any extension the browser-wallet option is hidden and uninstalled wallets link to their extension', async ({ page }) => {
     await page.goto('/')
     await page.click('#wbtn')
     await expect(page.locator('#wmodal .wopt[data-wallet="injected"]')).toHaveCount(0)
-    await expect(page.locator('#wmodal .wopt[data-wallet="okx"]')).toContainText('Get')
+    const okx = page.locator('#wmodal .wopt[data-wallet="okx"]')
+    await expect(okx).toContainText('Get extension')
+    await expect(okx).toHaveAttribute('href', /^https:\/\//)
+    await expect(page.locator('#wapps')).toHaveCount(0) // desktop: no "open in app" section
+  })
+
+  test('a wallet announced via EIP-6963 appears under "Detected in your browser" with its icon and connects', async ({ page }) => {
+    const icon = 'data:image/svg+xml;base64,' + Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="#e33"/></svg>').toString('base64')
+    await page.addInitScript(FAKE_PROVIDER.replace('isRabby: true', 'isRabby: false').replace('window.ethereum = provider;', `
+      const info = { uuid: 'b9c2c6e2-1111-4111-8111-000000000001', name: 'Backpack', icon: '${icon}', rdns: 'app.backpack' };
+      const announce = () => window.dispatchEvent(new CustomEvent('eip6963:announceProvider', { detail: Object.freeze({ info, provider }) }));
+      window.addEventListener('eip6963:requestProvider', announce); announce();`))
+    await page.goto('/app?s=1')
+    await page.click('#wbtn')
+    const bp = page.locator('#wdetected .wopt', { hasText: 'Backpack' })
+    await expect(bp).toContainText('Installed')
+    await expect(bp.locator('img')).toHaveAttribute('src', /^data:image\/svg/)
+    await bp.click()
+    await expect(page.locator('#toast')).toHaveText('Connected with Backpack')
+    await expect(page.locator('#wbtn')).toHaveText('0x1111…1111')
   })
 })
