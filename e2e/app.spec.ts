@@ -104,6 +104,12 @@ test.describe('/app (mock mode)', () => {
     await page.waitForURL(/tab=portfolio/)
     await expect(page.locator('#portfolio')).toContainText('JEPI · Mar 2027')
     await expect(page.locator('#portfolio')).toContainText('0.999')
+    // activity log + PnL from the demo session: split 2, merge 1.998, earn 1
+    await expect(page.locator('#activity h4')).toContainText('2 transactions · demo')
+    await expect(page.locator('#activity .act tbody tr')).toHaveCount(2)
+    await expect(page.locator('#activity .act tbody tr').first()).toContainText('Merge')
+    await expect(page.locator('#activity .act tbody tr').last()).toContainText('Split')
+    await expect(page.locator('#pnl')).toContainText('2.0000') // deposited
 
     await page.reload() // demo position survives a refresh (sessionStorage); wallet reconnects via the modal
     await page.click('#wbtn')

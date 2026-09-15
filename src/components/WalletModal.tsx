@@ -1,4 +1,5 @@
 'use client'
+import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { WalletButton } from '@rainbow-me/rainbowkit'
 import { useAccount, useConnect, useConnectors, type Connector } from 'wagmi'
@@ -179,6 +180,7 @@ export function WalletModal() {
         )}
 
         <div className="note">Network: Robinhood Chain ({CHAIN_ID}). You&apos;ll be asked to add or switch to it after connecting.</div>
+        <div className="note" id="wlegal">By connecting a wallet you agree to the <Link href="/legal/terms">Terms of Use</Link> and <Link href="/legal/risk">Risk Disclosure</Link>, and confirm you are not located in a restricted jurisdiction.</div>
       </div>
     </div>
   )

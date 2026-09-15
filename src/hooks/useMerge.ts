@@ -16,7 +16,7 @@ import { useTx } from './useTx'
 export function useMerge(series: Series) {
   const mock = isMockSeries(series)
   const { toast } = useToast()
-  const { update } = useMockPositions()
+  const { update, record } = useMockPositions()
   const tx = useTx()
 
   const merge = useCallback(
@@ -27,6 +27,7 @@ export function useMerge(series: Series) {
       const done = `Merged into ${a.num} ${t}`
       if (mock) {
         update(t, (p) => ({ ...p, pt: Math.max(0, p.pt - a.num), yt: Math.max(0, p.yt - a.num) }))
+        record({ id: series.id, ticker: t, action: 'Merge', ts: Math.floor(Date.now() / 1000), amount: a.num, base: a.num })
         toast(done)
         return
       }
@@ -40,7 +41,7 @@ export function useMerge(series: Series) {
         done,
       )
     },
-    [mock, series, toast, update, tx],
+    [mock, series, toast, update, record, tx],
   )
 
   return { merge, status: tx.status, busy: tx.busy, txHash: tx.txHash }

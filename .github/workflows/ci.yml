@@ -39,3 +39,49 @@ jobs:
           name: playwright-report
           path: playwright-report
           retention-days: 7
+
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      - run: forge --version
+      - run: forge build --sizes
+      - run: forge test -vvv
+      - name: ABIs in src/contracts/abis are up to date
+        working-directory: .
+        run: node scripts/sync-abis.mjs && git diff --exit-code -- src/contracts/abis
+
+  e2e-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [checks, contracts]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e:live
+        env:
+          CI: 'true'
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-live-report
+          path: test-results
+          retention-days: 7

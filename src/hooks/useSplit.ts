@@ -16,7 +16,7 @@ export { cleanAmount } from '@/lib/amount'
 export function useSplit(series: Series) {
   const mock = isMockSeries(series)
   const { toast } = useToast()
-  const { update } = useMockPositions()
+  const { update, record } = useMockPositions()
   const tx = useTx()
 
   const split = useCallback(
@@ -27,6 +27,7 @@ export function useSplit(series: Series) {
       const done = `Split ${a.num} ${t} → p${t} + y${t}`
       if (mock) {
         update(t, (p) => ({ ...p, pt: p.pt + a.num * (1 - SPLIT_FEE), yt: p.yt + a.num * (1 - SPLIT_FEE) }))
+        record({ id: series.id, ticker: t, action: 'Split', ts: Math.floor(Date.now() / 1000), amount: a.num, base: a.num * (1 - SPLIT_FEE) })
         toast(done)
         return
       }
@@ -39,7 +40,7 @@ export function useSplit(series: Series) {
         done,
       )
     },
-    [mock, series, toast, update, tx],
+    [mock, series, toast, update, record, tx],
   )
 
   return { split, status: tx.status, busy: tx.busy, txHash: tx.txHash }

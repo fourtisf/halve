@@ -31,6 +31,7 @@ export type Series = {
   schedule?: string // issuer's declared distribution schedule, e.g. "Oct 3 · monthly"
   lend?: LendParams // Morpho market presentation params
   morphoMarketId?: Hex // Morpho Blue market id (bytes32) for the pPT/USDC market
+  deployBlock?: number // vault deployment block: lower bound for activity log scans
 }
 
 type RawSeries = {
@@ -52,6 +53,7 @@ type RawSeries = {
   schedule?: string
   lend?: LendParams
   morphoMarketId?: string
+  deployBlock?: number
 }
 
 // SERIES_FILE=path at build time replaces series.json (next.config.ts inlines it as NEXT_PUBLIC_SERIES_JSON).
@@ -84,6 +86,7 @@ function parse(r: RawSeries): Series {
     schedule: r.schedule,
     lend: r.lend,
     morphoMarketId: marketId,
+    deployBlock: typeof r.deployBlock === 'number' && r.deployBlock >= 0 ? r.deployBlock : undefined,
   }
 }
 

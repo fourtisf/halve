@@ -71,6 +71,11 @@ test.describe.serial('live chain', () => {
     await expect(first(page, '#blk')).toHaveText(/block \d/)
     await page.goto('/oracle')
     await expect(page.locator('#orc tr').first()).toContainText('Synced')
+    // health reflects live mode against the local chain
+    const h = await (await page.request.get('/api/health')).json()
+    expect(h).toMatchObject({ ok: true, mock: false, chainId: 4663, series: { live: 1, ids: [SERIES.id] } })
+    expect(h.rpc.ok).toBe(true)
+    expect(h.rpc.block).toBeGreaterThan(0)
   })
 
   test('connect → approve + split → position from chain → merge', async ({ page }) => {
@@ -96,6 +101,19 @@ test.describe.serial('live chain', () => {
     await expect(page.locator('#toast')).toHaveText(`Merged into 4 ${t}`, { timeout: 30_000 })
     await expect(page.locator('#pos')).toContainText('5.990')
     expect(await pub.readContract({ address: SERIES.underlying, abi: stockAbi, functionName: 'balanceOf', args: [USER] })).toBe(parseEther('994'))
+
+    // Portfolio → Activity: both transactions come back from the vault's events with explorer links
+    await page.locator('.appbar a', { hasText: 'Portfolio' }).click()
+    await page.waitForURL(/tab=portfolio/)
+    await expect(page.locator('#portfolio')).toContainText('5.990')
+    await expect(page.locator('#activity h4')).toContainText('2 transactions', { timeout: 30_000 })
+    const acts = page.locator('#activity .act tbody tr')
+    await expect(acts.first()).toContainText('Merge')
+    await expect(acts.first()).toContainText('+4.0000')
+    await expect(acts.last()).toContainText('Split')
+    await expect(acts.first().locator('a')).toHaveAttribute('href', /blockscout\.com\/tx\/0x[0-9a-f]{64}$/)
+    await expect(page.locator('#pnl')).toContainText('10.0000') // deposited
+    await expect(page.locator('#pnl')).toContainText('4.0000') // withdrawn
   })
 
   test('a dividend on the stock token shows up in the ledger, KPIs and the position', async ({ page }) => {

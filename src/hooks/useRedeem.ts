@@ -14,7 +14,7 @@ import { useTx } from './useTx'
 export function useRedeem(series: Series, accrued: number) {
   const mock = isMockSeries(series)
   const { toast } = useToast()
-  const { update } = useMockPositions()
+  const { update, record } = useMockPositions()
   const tx = useTx()
   const t = series.ticker
 
@@ -30,6 +30,7 @@ export function useRedeem(series: Series, accrued: number) {
       const done = side === 'pt' ? `Redeemed ${a.num} p${t} → ${a.num} ${t}` : `Redeemed ${a.num} y${t} → ${quoteRedeemYT(a.num, accrued).out.toFixed(4)} ${t}`
       if (mock) {
         update(t, (p) => (side === 'pt' ? { ...p, pt: Math.max(0, p.pt - a.num) } : { ...p, yt: Math.max(0, p.yt - a.num) }))
+        record({ id: series.id, ticker: t, action: side === 'pt' ? 'Redeem PT' : 'Redeem YT', ts: Math.floor(Date.now() / 1000), amount: side === 'pt' ? a.num : quoteRedeemYT(a.num, accrued).out, base: a.num })
         toast(done)
         return
       }
@@ -39,7 +40,7 @@ export function useRedeem(series: Series, accrued: number) {
         done,
       )
     },
-    [mock, series, t, accrued, toast, update, tx],
+    [mock, series, t, accrued, toast, update, record, tx],
   )
 
   return { settle, redeem, status: tx.status, busy: tx.busy, txHash: tx.txHash }

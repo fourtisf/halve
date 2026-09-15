@@ -8,7 +8,7 @@ import { useIsMounted } from '@/hooks/useIsMounted'
 import { useWalletModal } from '@/lib/walletModal'
 import { shortAddr } from '@/lib/format'
 import { CHAIN_ID } from '@/lib/wagmi'
-import { LINKS, externalProps } from '@/lib/links'
+import { LINKS, externalProps, isExternal } from '@/lib/links'
 import { HalveLogo } from './Logo'
 
 const NAV = [
@@ -39,7 +39,7 @@ export function Nav() {
   const links = (cls?: string) => (
     <>
       {NAV.map((l) => <Link key={l.href} href={l.href} className={pathname === l.href ? 'on' : cls}>{l.label}</Link>)}
-      <a href={LINKS.docs} {...externalProps(LINKS.docs)}>Docs</a>
+      {isExternal(LINKS.docs) ? <a href={LINKS.docs} {...externalProps(LINKS.docs)}>Docs</a> : <Link href={LINKS.docs} className={pathname === LINKS.docs ? 'on' : cls}>Docs</Link>}
     </>
   )
   return (

@@ -1,39 +1,55 @@
 'use client'
 /**
- * In-memory position store used in MOCK mode (mirrors the prototype's `pos` object).
- * Persisted to sessionStorage so a refresh keeps the demo position for the tab.
+ * In-memory position store used in MOCK mode (mirrors the prototype's `pos` object), plus the demo
+ * wallet's activity log. Persisted to sessionStorage so a refresh keeps the demo state for the tab.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import type { ActivityRow } from './activity'
 
 export type MockPos = { pt: number; yt: number; lp: number }
-type Store = {
-  pos: Record<string, MockPos>
+type State = { pos: Record<string, MockPos>; log: ActivityRow[] }
+type Store = State & {
   update: (ticker: string, fn: (p: MockPos) => MockPos) => void
+  record: (row: ActivityRow) => void
 }
 
-const KEY = 'halve:mockpos'
+const KEY = 'halve:mock:v2'
+const EMPTY: State = { pos: {}, log: [] }
 const Ctx = createContext<Store | null>(null)
 
-function load(): Record<string, MockPos> {
+function load(): State {
   try {
     const raw = sessionStorage.getItem(KEY)
-    return raw ? (JSON.parse(raw) as Record<string, MockPos>) : {}
+    if (!raw) return EMPTY
+    const j = JSON.parse(raw) as Partial<State>
+    return { pos: j.pos ?? {}, log: Array.isArray(j.log) ? j.log : [] }
   } catch {
-    return {}
+    return EMPTY
   }
 }
 
+function save(s: State) {
+  try { sessionStorage.setItem(KEY, JSON.stringify(s)) } catch { /* storage unavailable */ }
+}
+
 export function MockPositionProvider({ children }: { children: ReactNode }) {
-  const [pos, setPos] = useState<Record<string, MockPos>>({})
-  useEffect(() => setPos(load()), []) // after hydration, so SSR and first client render match
+  const [state, setState] = useState<State>(EMPTY)
+  useEffect(() => setState(load()), []) // after hydration, so SSR and first client render match
   const update = useCallback((ticker: string, fn: (p: MockPos) => MockPos) => {
-    setPos((prev) => {
-      const next = { ...prev, [ticker]: fn(prev[ticker] ?? { pt: 0, yt: 0, lp: 0 }) }
-      try { sessionStorage.setItem(KEY, JSON.stringify(next)) } catch { /* storage unavailable */ }
+    setState((prev) => {
+      const next = { ...prev, pos: { ...prev.pos, [ticker]: fn(prev.pos[ticker] ?? { pt: 0, yt: 0, lp: 0 }) } }
+      save(next)
       return next
     })
   }, [])
-  const value = useMemo(() => ({ pos, update }), [pos, update])
+  const record = useCallback((row: ActivityRow) => {
+    setState((prev) => {
+      const next = { ...prev, log: [...prev.log, row].slice(-200) }
+      save(next)
+      return next
+    })
+  }, [])
+  const value = useMemo(() => ({ ...state, update, record }), [state, update, record])
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }
 

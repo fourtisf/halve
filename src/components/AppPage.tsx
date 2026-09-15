@@ -10,6 +10,7 @@ import { DividendLedger } from './DividendLedger'
 import { ActionPanel, type Mode } from './ActionPanel'
 import { Position } from './Position'
 import { Portfolio } from './Portfolio'
+import { Activity } from './Activity'
 import { Banner, RPC_ERROR_TEXT } from './Skeleton'
 import { useSeriesAt } from '@/hooks/useSeries'
 import { useAllSeriesStats } from '@/hooks/useSeriesStats'
@@ -63,7 +64,7 @@ export function AppPage() {
 
   return (
     <AppShell active={active}>
-      {tab === 'portfolio' && <div className="wrap" style={{ paddingTop: 28 }}><Portfolio /></div>}
+      {tab === 'portfolio' && <div className="wrap" style={{ paddingTop: 28 }}><Portfolio /><Activity /></div>}
       <div className="wrap applay" style={tab === 'portfolio' ? { paddingTop: 16 } : undefined}>
         <div>
           <div className="panel">
