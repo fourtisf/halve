@@ -40,5 +40,13 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^5.0.0"
+  },
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "bufferutil",
+      "keccak",
+      "unrs-resolver",
+      "utf-8-validate"
+    ]
   }
 }
