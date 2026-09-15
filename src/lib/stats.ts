@@ -39,7 +39,7 @@ export function statsContracts(s: Series): ContractFunctionParameters[] {
 export type Slot0 = readonly [bigint, number, number, number, number, number, boolean]
 export type Round = readonly [bigint, bigint, bigint, bigint, bigint]
 
-/** Vault state enum (assumption — verify against StripVault): 0 Active, 1 Matured, 2 Settled. */
+/** StripVault.state(): 0 Active, 1 Matured (settle() callable), 2 Settled (redeem open). */
 export const VAULT_STATE = { Active: 0, Matured: 1, Settled: 2 } as const
 
 export function parseStats(s: Series, data: readonly ReadResult[] | undefined, base: number, now: number): SeriesStats {

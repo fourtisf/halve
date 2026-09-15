@@ -47,3 +47,7 @@ next-env.d.ts
 
 # runtime history store (file backend)
 /data/
+
+# second build for the anvil e2e run (scripts/e2e-live.mjs)
+/.next-live/
+/.e2e-live/

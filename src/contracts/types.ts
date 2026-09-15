@@ -54,7 +54,9 @@ type RawSeries = {
   morphoMarketId?: string
 }
 
-const raw = rawJson as unknown as RawSeries[]
+// SERIES_FILE=path at build time replaces series.json (next.config.ts inlines it as NEXT_PUBLIC_SERIES_JSON).
+const override = process.env.NEXT_PUBLIC_SERIES_JSON
+const raw = (override ? JSON.parse(override) : rawJson) as RawSeries[]
 
 function addr(v: string, field: string, id: string): Address {
   if (!isAddress(v)) throw new Error(`series.json: ${id}.${field} is not an address: ${v}`)
