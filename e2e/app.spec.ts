@@ -54,7 +54,10 @@ test.describe('/app (mock mode)', () => {
     await page.click('#wbtn')
     await expect(page.locator('#wmodal')).toHaveClass(/open/)
     await expect(page.locator('#wmodal .wopt').first()).toBeFocused()
-    await expect(page.locator('#wmodal .wopt')).toContainText(['MetaMask', 'Rabby', 'Demo wallet'])
+    for (const name of ['MetaMask', 'Rabby', 'Coinbase Wallet', 'Trust Wallet', 'OKX Wallet', 'Phantom', 'Rainbow', 'Binance Wallet', 'Demo wallet']) {
+      await expect(page.locator('#wmodal .wopt', { hasText: name })).toHaveCount(1)
+    }
+    await expect(page.locator('#wmodal .wicon img').first()).toHaveAttribute('src', /^data:image/)
     await page.keyboard.press('Escape')
     await expect(page.locator('#wmodal')).not.toHaveClass(/open/)
     await page.click('#go')

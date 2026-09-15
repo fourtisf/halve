@@ -1,5 +1,16 @@
 import { connectorsForWallets } from '@rainbow-me/rainbowkit'
-import { metaMaskWallet, rabbyWallet, walletConnectWallet } from '@rainbow-me/rainbowkit/wallets'
+import {
+  binanceWallet,
+  coinbaseWallet,
+  injectedWallet,
+  metaMaskWallet,
+  okxWallet,
+  phantomWallet,
+  rabbyWallet,
+  rainbowWallet,
+  trustWallet,
+  walletConnectWallet,
+} from '@rainbow-me/rainbowkit/wallets'
 import { createConfig, http } from 'wagmi'
 import { mock } from 'wagmi/connectors'
 import type { Address } from 'viem'
@@ -12,7 +23,20 @@ export { CHAIN_ID, EXPLORER, explorerAddress, explorerTx, robinhood } from './ch
 export const DEMO_ADDRESS: Address = '0x7A3fBfD642293398Dc260198e0A376e7Da9bC32F'
 export const DEMO_CONNECTOR_ID = 'mock'
 
-const walletList = [metaMaskWallet, rabbyWallet, ...(HAS_WALLETCONNECT ? [walletConnectWallet] : [])]
+/** Wallets offered in the picker, in display order. WalletConnect (and the mobile/QR flow of the
+ *  others) needs NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID; injected wallets work without it. */
+const walletList = [
+  metaMaskWallet,
+  rabbyWallet,
+  coinbaseWallet,
+  trustWallet,
+  okxWallet,
+  phantomWallet,
+  rainbowWallet,
+  binanceWallet,
+  injectedWallet,
+  ...(HAS_WALLETCONNECT ? [walletConnectWallet] : []),
+]
 
 const rainbowConnectors = connectorsForWallets([{ groupName: 'Wallets', wallets: walletList }], {
   appName: 'Halve',
