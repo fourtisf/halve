@@ -16,6 +16,7 @@ const bin = (name) => (process.env.FOUNDRY_BIN ? resolve(process.env.FOUNDRY_BIN
 const RPC = 'http://127.0.0.1:8546'
 const KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
 const keep = process.argv.includes('--keep')
+const useKeystore = process.argv.includes('--keystore') // sign through a forge keystore (WALLET_ARGS) instead of DEPLOYER_KEY
 
 const rpc = async (method, params = []) => {
   const r = await fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) })
@@ -38,9 +39,16 @@ try {
   const uni = await deployUniswap(RPC, KEY, mock.underlying)
 
   const dir = resolve(root, '.e2e-live'); mkdirSync(dir, { recursive: true })
+  let signing = `DEPLOYER_KEY=${KEY}`
+  if (useKeystore) {
+    const ks = resolve(dir, 'keystore'); mkdirSync(ks, { recursive: true })
+    spawnSync('rm', ['-f', resolve(ks, 'rehearsal')])
+    sh(bin('cast'), ['wallet', 'import', 'rehearsal', '--private-key', KEY, '--unsafe-password', 'rehearsal', '--keystore-dir', ks])
+    signing = `WALLET_ARGS=--keystore ${resolve(ks, 'rehearsal')} --password rehearsal`
+  }
   const envFile = resolve(dir, 'env.rehearsal')
   writeFileSync(envFile, [
-    `DEPLOYER_KEY=${KEY}`, `RPC_URL=${RPC}`, 'CHAIN_ID=4663', 'VERIFY=0',
+    signing, `RPC_URL=${RPC}`, 'CHAIN_ID=4663', 'VERIFY=0',
     `STOCK=${mock.underlying}`, 'TICKER=JEPI', 'SERIES_ID=JEPI-MAR27', `MATURITY=${Math.floor(Date.now() / 1000) + 180 * 86400}`,
     'CAP=1000000000000000000000000', `TREASURY=0x70997970C51812dc3A010C7d01b50e0d17dc79C8`, `GUARDIAN=0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC`, `OWNER=0x90F79bf6EB2c4f870365E785982E1f101E93b906`,
     `PRICE_FEED=${mock.priceFeed}`, `NPM=${uni.npm}`, 'QUOTE_KIND=wrapped', 'FEE=3000', 'SEED_AMOUNT=10000000000000000000000',

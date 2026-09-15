@@ -75,8 +75,15 @@ try {
     if (c && c !== '0x') ok('position manager has code', NPM); else bad('NPM', 'no code at NPM')
   }
   else console.log('  · no NPM: pools are skipped (create them later with CreatePools.s.sol)')
-  if (env.DEPLOYER_KEY) {
-    const a = privateKeyToAccount(env.DEPLOYER_KEY).address
+  // deployer address: from the key, or from the keystore / ledger via `cast wallet address`
+  let deployer = env.DEPLOYER_KEY ? privateKeyToAccount(env.DEPLOYER_KEY).address : null
+  if (!deployer && env.WALLET_ARGS) {
+    const r = spawnSync(bin('cast'), ['wallet', 'address', ...env.WALLET_ARGS.split(/\s+/)], { encoding: 'utf8' })
+    deployer = r.status === 0 ? r.stdout.trim() : null
+    if (!deployer) bad('deployer', `cast wallet address failed: ${(r.stderr || '').trim().split('\n')[0]}`)
+  }
+  if (deployer) {
+    const a = deployer
     const bal = await client.getBalance({ address: a })
     if (bal > 0n) ok(`deployer ${a} balance`, `${formatEther(bal)} ETH`); else bad('deployer balance', `${a} has no gas`)
     if (env.SEED_AMOUNT) {
