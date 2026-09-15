@@ -3,9 +3,9 @@ import { expect, test, type Page } from '@playwright/test'
 const text = (page: Page, sel: string) => page.locator(sel).first()
 
 test.describe('/app (mock mode)', () => {
-  test('defaults to JEPI, ticks the block counter and switches series', async ({ page }) => {
+  test('defaults to SCHD, ticks the block counter and switches series', async ({ page }) => {
     await page.goto('/app')
-    await expect(text(page, '#aTtl')).toHaveText('JEPI · Mar 2027')
+    await expect(text(page, '#aTtl')).toHaveText('SCHD · Mar 2027')
     await expect(text(page, '#kApy')).toHaveText('8.3%')
     await expect(text(page, '#kYt')).toHaveText('0.041')
     await expect(text(page, '#blk')).toHaveText('block 4,812,337')
@@ -16,7 +16,7 @@ test.describe('/app (mock mode)', () => {
     await expect(page.locator('#ledger tr')).toHaveCount(6)
   })
 
-  test('O shows the held special dividend on top of the ledger', async ({ page }) => {
+  test('SPY shows the held special dividend on top of the ledger', async ({ page }) => {
     await page.goto('/app?s=2')
     const first = page.locator('#ledger tr').first()
     await expect(first).toContainText('Special dividend')
@@ -27,13 +27,13 @@ test.describe('/app (mock mode)', () => {
   test('split / merge / earn quotes follow the prototype maths', async ({ page }) => {
     await page.goto('/app?s=1')
     await page.fill('#amt', '2.5')
-    await expect(text(page, '#o1')).toHaveText('2.498 pJEPI')
-    await expect(text(page, '#o2')).toHaveText('2.498 yJEPI')
-    await expect(text(page, '#meta')).toContainText('0.0025 JEPI (0.10%)')
+    await expect(text(page, '#o1')).toHaveText('2.498 pSCHD')
+    await expect(text(page, '#o2')).toHaveText('2.498 ySCHD')
+    await expect(text(page, '#meta')).toContainText('0.0025 SCHD (0.10%)')
     await expect(text(page, '#go')).toHaveText('Connect wallet')
     await page.click('#tMerge')
     await expect(text(page, '#inLbl')).toHaveText('You merge')
-    await expect(text(page, '#inAsset')).toHaveText('pJEPI + yJEPI')
+    await expect(text(page, '#inAsset')).toHaveText('pSCHD + ySCHD')
     await expect(text(page, '#meta')).toContainText('0 · free')
     await page.click('#tEarn')
     await expect(text(page, '#o1')).toHaveText('1.249 LP')
@@ -71,17 +71,17 @@ test.describe('/app (mock mode)', () => {
     await expect(page.locator('#toast')).toHaveText('Connected with Demo wallet')
     await expect(page.locator('#wbtn')).toHaveText('0x7A3f…C32F')
     await expect(text(page, '#bal')).toHaveText('12.40')
-    await expect(text(page, '#go')).toHaveText('Split 1 JEPI')
+    await expect(text(page, '#go')).toHaveText('Split 1 SCHD')
 
     await page.fill('#amt', '2')
     await page.click('#go')
-    await expect(page.locator('#toast')).toHaveText('Split 2 JEPI → pJEPI + yJEPI')
+    await expect(page.locator('#toast')).toHaveText('Split 2 SCHD → pSCHD + ySCHD')
     await expect(page.locator('#pos')).toContainText('1.998')
     await expect(page.locator('#pos')).toContainText('Accrued dividends')
     await expect(page.locator('#pos')).toContainText('Redeems at maturity')
 
     await page.fill('#amt', '50')
-    await expect(text(page, '#go')).toHaveText('Insufficient JEPI')
+    await expect(text(page, '#go')).toHaveText('Insufficient SCHD')
     await expect(text(page, '#go')).toBeDisabled()
     await page.fill('#amt', '0')
     await expect(text(page, '#go')).toHaveText('Enter an amount')
@@ -91,18 +91,18 @@ test.describe('/app (mock mode)', () => {
     await page.locator('#bal ~ button', { hasText: 'Max' }).click()
     await expect(page.locator('#amt')).toHaveValue('1.998')
     await page.click('#go')
-    await expect(page.locator('#toast')).toHaveText('Merged into 1.998 JEPI')
+    await expect(page.locator('#toast')).toHaveText('Merged into 1.998 SCHD')
     await expect(page.locator('#pos')).toContainText('Nothing yet')
 
     await page.click('#tEarn')
     await page.fill('#amt', '1')
     await page.click('#go')
-    await expect(page.locator('#toast')).toHaveText('Provided 1 JEPI to both pools')
+    await expect(page.locator('#toast')).toHaveText('Provided 1 SCHD to both pools')
     await expect(page.locator('#pos')).toContainText('LP')
 
     await page.locator('.appbar a', { hasText: 'Portfolio' }).click() // client-side nav keeps wallet + demo state
     await page.waitForURL(/tab=portfolio/)
-    await expect(page.locator('#portfolio')).toContainText('JEPI · Mar 2027')
+    await expect(page.locator('#portfolio')).toContainText('SCHD · Mar 2027')
     await expect(page.locator('#portfolio')).toContainText('0.999')
     // activity log + PnL from the demo session: split 2, merge 1.998, earn 1
     await expect(page.locator('#activity h4')).toContainText('2 transactions · demo')

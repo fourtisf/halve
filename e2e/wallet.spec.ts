@@ -44,7 +44,7 @@ test.describe('real wallet connection path (fake injected provider)', () => {
     await expect(page.locator('#wbtn')).toHaveText('0x1111…1111')
     await expect(page.locator('#wmodal')).not.toHaveClass(/open/)
     // ChainGuard switched the fake wallet from mainnet to Robinhood Chain, so the action button is live.
-    await expect(page.locator('#go')).toHaveText('Split 1 JEPI')
+    await expect(page.locator('#go')).toHaveText('Split 1 SCHD')
     await expect(page.locator('#bal')).toHaveText('12.40') // mock balance until addresses are filled
   })
 

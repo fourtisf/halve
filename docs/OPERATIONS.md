@@ -59,6 +59,12 @@ traffic, add a cron on the VPS:
 */15 * * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://halve.finance/api/cron/sample >/dev/null
 ```
 
+## Keeper and guardian
+
+`node scripts/keeper.mjs` every 10 minutes from cron (see docs/MAINNET.md) keeps every accountant in
+sync with its stock token. When the log says `held`, a change is waiting for the guardian: read it on
+`/oracle`, and after the two-day timelock resolve it with `cast send <accountant> "resolvePending(uint8)" <1 split | 2 special>`.
+
 ## Backups
 
 Only `data/history/` holds state (the chart samples); everything else is the git checkout and

@@ -124,6 +124,10 @@ STOCK=0x… TICKER=JEPI MATURITY=1806451200 CAP=1000000000000000000000000 TREASU
 Robinhood Chain testnet is chain id 46630; deploy and run through the full lifecycle there (split,
 dividend sync, held change + guardian resolve, maturity, settle, redeem) before mainnet.
 
+`docs/AUDIT-INTERNAL.md` is the implementing engineer's security review (not an independent audit);
+`scripts/smoke-mainnet.mjs` proves split → Uniswap trade → merge with real funds after a deploy;
+`scripts/keeper.mjs` keeps the accountants synced from cron.
+
 ### Go-live checklist
 
 1. `forge test` green; ABIs regenerated (`pnpm abis`) and committed.

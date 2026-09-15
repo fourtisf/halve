@@ -75,8 +75,26 @@ pnpm build && pm2 restart halve --update-env
 curl -fsS https://halve.finance/api/health | jq .   # ok: true, mock: false, series.live: 1
 ```
 
-Walk through split → merge on mainnet with a small amount from a real wallet, and check the Portfolio
-activity row links to Blockscout. Repeat per series.
+Then prove people can really buy, with a small amount of the stock token in the deployer wallet:
+
+```bash
+AMOUNT=1000000000000000000 node scripts/smoke-mainnet.mjs   # split 1 → sell 10 % of the PT on Uniswap → buy back → merge
+```
+
+It stops at the first step that misbehaves. Then walk through split → merge in the UI from a real wallet
+and check the Portfolio activity row links to Blockscout. Repeat per series.
+
+## Keeper
+
+Something must call `accountant.sync()` after each multiplier change:
+
+```
+*/10 * * * * cd ~/halve/halve && node scripts/keeper.mjs >> /var/log/halve/keeper.log 2>&1
+```
+
+It reads `.env.mainnet` for the signer, compares `uiMultiplier()` with the accountant's `lastMultiplier()`
+for every live series, and sends `sync()` when they differ. A held change shows up in the log and on
+`/oracle`; the guardian resolves it after two days with `cast send <accountant> "resolvePending(uint8)" 1|2`.
 
 ## $HALVE token (optional, independent)
 
@@ -98,8 +116,8 @@ becomes a Blockscout link. Any $HALVE/USDC pool is a separate decision; nothing 
 
 ## Still open
 
-- **Audit**: none yet. `/docs#security` and the Risk Disclosure say so; keep it that way until a report is linked.
-- **Keeper**: someone must call `accountant.sync()` after each multiplier change (a cron with `cast send`, or any bot). Late is fine, the vault pauses splits meanwhile; merges never pause.
+- **Audit**: none yet. `docs/AUDIT-INTERNAL.md` is the implementing engineer's own review (findings fixed, limitations listed); it is not independent. `/docs#security` and the Risk Disclosure say so; keep it that way until a report is linked.
+- **Keeper**: `scripts/keeper.mjs` on a cron (above). Late is fine, the vault pauses splits meanwhile; merges never pause.
 - **Liquidity**: seeding is capital you commit; without it the app shows no prices.
 
 Two local rehearsals exist and run in CI: `pnpm test:e2e:live` (real Uniswap v3 factory + position

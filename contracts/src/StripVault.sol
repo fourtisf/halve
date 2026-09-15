@@ -24,6 +24,10 @@ contract StripVault {
     uint256 public constant SPLIT_FEE_BPS = 10; // 0.10 %
     uint256 public constant YIELD_FEE_BPS = 500; // 5 %
 
+    /// @notice If the accountant is still holding a change this long after maturity (guardian absent), anyone
+    /// may settle on the index as it stands: the held change then goes to PT holders, but nobody is locked out.
+    uint256 public constant FORCE_SETTLE_DELAY = 30 days;
+
     uint8 public constant STATE_ACTIVE = 0;
     uint8 public constant STATE_MATURED = 1;
     uint8 public constant STATE_SETTLED = 2;
@@ -53,6 +57,16 @@ contract StripVault {
     modifier onlyOwner() {
         require(msg.sender == owner, "Vault: owner only");
         _;
+    }
+
+    uint256 private _entered;
+
+    /// @dev The stock token is an upgradeable contract we do not control; never let it re-enter a state change.
+    modifier nonReentrant() {
+        require(_entered == 0, "Vault: reentrancy");
+        _entered = 1;
+        _;
+        _entered = 0;
     }
 
     constructor(
@@ -92,9 +106,11 @@ contract StripVault {
     }
 
     /// @notice Raw tokens one PT redeems for right now (WAD): d0 / dividendIndex, i.e. the share without the
-    /// dividends reinvested so far. Frozen at settlement.
+    /// dividends reinvested so far. Frozen at settlement. Capped at 1.0: if the index ever fell below d0 (a
+    /// negative adjustment the guardian resolved as special), PT keeps the whole raw unit and YT gets nothing.
     function principalPerPT() public view returns (uint256) {
         uint256 d = settled ? dm : accountant.dividendIndex();
+        if (d <= d0) return WAD;
         return (d0 * WAD) / d;
     }
 
@@ -108,7 +124,7 @@ contract StripVault {
     // --------------------------------------------------------------- writes
 
     /// @notice Deposit `amount` raw tokens. Paused only while the accountant holds a change.
-    function split(uint256 amount) external returns (uint256 base) {
+    function split(uint256 amount) external nonReentrant returns (uint256 base) {
         require(state() == STATE_ACTIVE, "Vault: matured");
         require(accountant.isSynced(), "Vault: accountant held");
         require(amount > 0, "Vault: zero");
@@ -126,7 +142,7 @@ contract StripVault {
     }
 
     /// @notice Burn `base` PT and `base` YT for the raw tokens they represent. Free, in every state.
-    function merge(uint256 base) external returns (uint256 amount) {
+    function merge(uint256 base) external nonReentrant returns (uint256 amount) {
         require(base > 0, "Vault: zero");
         pt.burn(msg.sender, base);
         yt.burn(msg.sender, base);
@@ -134,17 +150,17 @@ contract StripVault {
         emit Merge(msg.sender, base, amount);
     }
 
-    /// @notice Anyone may settle once matured and the accountant has nothing held.
+    /// @notice Anyone may settle once matured and the accountant has nothing held, or FORCE_SETTLE_DELAY later regardless.
     function settle() external {
         require(!settled, "Vault: settled");
         require(block.timestamp >= maturity, "Vault: not matured");
-        require(accountant.isSynced(), "Vault: accountant held");
+        require(accountant.isSynced() || block.timestamp >= maturity + FORCE_SETTLE_DELAY, "Vault: accountant held");
         dm = accountant.dividendIndex();
         settled = true;
         emit Settled(dm);
     }
 
-    function redeemPT(uint256 base) external returns (uint256 amount) {
+    function redeemPT(uint256 base) external nonReentrant returns (uint256 amount) {
         require(settled, "Vault: not settled");
         require(base > 0, "Vault: zero");
         pt.burn(msg.sender, base);
@@ -152,7 +168,7 @@ contract StripVault {
         emit RedeemPT(msg.sender, base, amount);
     }
 
-    function redeemYT(uint256 base) external returns (uint256 amount) {
+    function redeemYT(uint256 base) external nonReentrant returns (uint256 amount) {
         require(settled, "Vault: not settled");
         require(base > 0, "Vault: zero");
         yt.burn(msg.sender, base);
@@ -164,7 +180,7 @@ contract StripVault {
     }
 
     /// @notice Send raw tokens above liabilities (donations, rounding dust) to the treasury.
-    function skim() external returns (uint256 surplus) {
+    function skim() external nonReentrant returns (uint256 surplus) {
         uint256 bal = stock.balanceOf(address(this));
         uint256 owed = liabilities();
         surplus = bal > owed ? bal - owed : 0;

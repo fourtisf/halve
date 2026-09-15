@@ -54,6 +54,7 @@ contract MultiplierAccountant {
     }
 
     constructor(IStockToken _stock, address _guardian) {
+        require(_guardian != address(0), "Accountant: zero guardian");
         stock = _stock;
         guardian = _guardian;
         lastMultiplier = _stock.uiMultiplier();
@@ -132,6 +133,7 @@ contract MultiplierAccountant {
     }
 
     function setGuardian(address g) external onlyGuardian {
+        require(g != address(0), "Accountant: zero guardian");
         guardian = g;
         emit GuardianChanged(g);
     }

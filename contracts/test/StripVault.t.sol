@@ -206,6 +206,62 @@ contract StripVaultTest is Test {
         assertEq(vault.merge(99.9e18), 99.9e18); // holders are still whole
     }
 
+    function test_negativeAdjustmentGivesPTEverythingAndNeverReverts() public {
+        vm.prank(alice);
+        vault.split(100e18);
+        stock.setUIMultiplier(0.995e18); // a 0.5 % negative adjustment: not a dividend, not a clean split → held
+        acct.sync();
+        assertFalse(acct.isSynced());
+        uint8 special = acct.KIND_SPECIAL();
+        vm.warp(block.timestamp + 2 days);
+        vm.prank(guardian);
+        acct.resolvePending(special); // guardian books it against the dividend index: D < d0
+        assertLt(acct.dividendIndex(), vault.d0());
+        assertEq(vault.principalPerPT(), WAD); // capped
+        vm.warp(maturity);
+        vault.settle();
+        vm.startPrank(alice);
+        assertEq(vault.redeemPT(99.9e18), 99.9e18);
+        assertEq(vault.redeemYT(99.9e18), 0);
+        vm.stopPrank();
+    }
+
+    function test_forceSettleWhenTheGuardianNeverShowsUp() public {
+        vm.prank(alice);
+        vault.split(100e18);
+        _dividend(1.01e18);
+        stock.setUIMultiplier(stock.uiMultiplier() * 1.0381e18 / WAD);
+        acct.sync(); // held, and nobody resolves it
+        vm.warp(maturity + 29 days);
+        vm.expectRevert("Vault: accountant held");
+        vault.settle();
+        vm.warp(maturity + 30 days);
+        vault.settle(); // on the index as it stands: the held 3.81 % stays with PT
+        assertEq(vault.dm(), 1.01e18);
+        vm.prank(alice);
+        assertApproxEqRel(vault.redeemPT(99.9e18), 99.9e18 * WAD / 1.01e18, 1e12);
+    }
+
+    function test_guardianCannotBeBurned() public {
+        vm.prank(guardian);
+        vm.expectRevert("Accountant: zero guardian");
+        acct.setGuardian(address(0));
+    }
+
+    function test_stockTokenCannotReenterTheVault() public {
+        ReentrantStock evil = new ReentrantStock();
+        MultiplierAccountant a2 = new MultiplierAccountant(IStockToken(address(evil)), guardian);
+        StripVault v2 = new StripVault(IStockToken(address(evil)), a2, "EVIL", maturity, 1_000_000e18, treasury, owner);
+        evil.arm(address(v2));
+        evil.mint(alice, 100e18);
+        vm.startPrank(alice);
+        evil.approve(address(v2), type(uint256).max);
+        vm.expectRevert(); // the nested split() reverts with "Vault: reentrancy", which bubbles up through the token
+        v2.split(10e18);
+        vm.stopPrank();
+        assertEq(v2.totalDeposits(), 0);
+    }
+
     function testFuzz_splitThenMergeIsLossless(uint96 amount) public {
         vm.assume(amount >= 1e12 && amount <= 1_000e18);
         vm.startPrank(alice);
@@ -230,5 +286,22 @@ contract StripVaultTest is Test {
         vm.stopPrank();
         assertApproxEqAbs(p + y + (stock.balanceOf(treasury) - t), base, 4);
         assertLe(stock.balanceOf(address(vault)), 4);
+    }
+}
+
+/// A stock token that tries to call back into the vault from inside transferFrom.
+contract ReentrantStock is MockStockToken {
+    address public vault;
+
+    constructor() MockStockToken("Evil", "EVIL") {}
+
+    function arm(address v) external {
+        vault = v;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) external override returns (bool) {
+        _transfer(from, to, amount);
+        if (vault != address(0) && msg.sender == vault) StripVault(vault).split(1e18); // must revert
+        return true;
     }
 }

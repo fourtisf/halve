@@ -43,6 +43,19 @@ export const stripVaultAbi = [
   },
   {
     "type": "function",
+    "name": "FORCE_SETTLE_DELAY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "SPLIT_FEE_BPS",
     "inputs": [],
     "outputs": [

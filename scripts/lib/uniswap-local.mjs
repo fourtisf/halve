@@ -19,5 +19,7 @@ export async function deployUniswap(rpc, deployerKey, weth9) {
   const factory = await deploy('@uniswap/v3-core/artifacts/contracts/UniswapV3Factory.sol/UniswapV3Factory.json', [])
   // WETH9 and the token descriptor are never used by our flows (no ETH pairs, no tokenURI); any non-zero address will do
   const npm = await deploy('@uniswap/v3-periphery/artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json', [factory, weth9, '0x0000000000000000000000000000000000000001'])
-  return { factory, npm }
+  // SwapRouter02(factoryV2, factoryV3, positionManager, WETH9): no v2 factory locally
+  const router = await deploy('@uniswap/swap-router-contracts/artifacts/contracts/SwapRouter02.sol/SwapRouter02.json', ['0x0000000000000000000000000000000000000001', factory, npm, weth9])
+  return { factory, npm, router }
 }
