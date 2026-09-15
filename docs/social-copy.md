@@ -49,7 +49,7 @@ order. 500 characters max per post, no hashtags needed.
 
 **Bio** (150 max)
 
-> Fixed yield and dividend tokens for tokenized stocks. PT is the share at a discount, YT is the dividends. Live on Robinhood Chain. Not investment advice.
+> Fixed yield and dividend tokens for tokenized stocks. PT is the share at a discount, YT is the dividends. On Robinhood Chain. Not investment advice.
 
 **01 · Intro** with `halve-threads-01-intro-1080x1350.png`
 
