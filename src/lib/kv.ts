@@ -1,13 +1,19 @@
 /**
- * Server-only KV access for the YT price / TVL series (Vercel KV or Upstash Redis via REST).
- * One sorted set per series: key halve:hist:<id>, score = unix seconds, member = JSON sample.
+ * Server-only store for the YT price / TVL series.
+ * Backend 1: Vercel KV / Upstash Redis via REST (KV_REST_API_* or UPSTASH_REDIS_REST_*).
+ * Backend 2 (default when no Redis is configured): JSON files under HISTORY_DIR (./data/history),
+ * which is enough for a single-process VPS deployment and needs no external service.
+ * One series per key/file; samples are { t, yt, tvl } sorted by t.
  */
 import { Redis } from '@upstash/redis'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import { CHART_DAYS } from '@/contracts/constants'
 import type { Sample } from './history'
 
-let client: Redis | null | undefined
+const RETENTION_S = (CHART_DAYS + 2) * 86_400
 
+let client: Redis | null | undefined
 export function getRedis(): Redis | null {
   if (client !== undefined) return client
   const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL
@@ -17,32 +23,59 @@ export function getRedis(): Redis | null {
 }
 
 export const historyKey = (id: string) => `halve:hist:${id}`
+export const historyBackend = (): 'redis' | 'file' => (getRedis() ? 'redis' : 'file')
 
+const parse = (m: string | Sample): Sample => (typeof m === 'string' ? (JSON.parse(m) as Sample) : m)
+const valid = (s: Sample | undefined): s is Sample => !!s && typeof s.t === 'number' && typeof s.yt === 'number'
+
+// ---- file backend ----
+const dir = () => process.env.HISTORY_DIR || path.join(process.cwd(), 'data', 'history')
+const fileFor = (id: string) => path.join(dir(), `${id.replace(/[^A-Za-z0-9_-]/g, '_')}.json`)
+
+async function fileRead(id: string): Promise<Sample[]> {
+  try {
+    const raw = JSON.parse(await readFile(fileFor(id), 'utf8')) as Sample[]
+    return raw.filter(valid).sort((a, b) => a.t - b.t)
+  } catch {
+    return []
+  }
+}
+
+async function fileWrite(id: string, samples: Sample[]): Promise<void> {
+  await mkdir(dir(), { recursive: true })
+  const f = fileFor(id)
+  await writeFile(`${f}.tmp`, JSON.stringify(samples))
+  await rename(`${f}.tmp`, f)
+}
+
+// ---- public API (backend-agnostic) ----
 export async function readHistory(id: string, now = Math.floor(Date.now() / 1000)): Promise<Sample[]> {
-  const r = getRedis()
-  if (!r) return []
   const since = now - (CHART_DAYS + 1) * 86_400
+  const r = getRedis()
+  if (!r) return (await fileRead(id)).filter((s) => s.t >= since)
   const raw = await r.zrange<(string | Sample)[]>(historyKey(id), since, '+inf', { byScore: true })
-  return raw
-    .map((m) => (typeof m === 'string' ? (JSON.parse(m) as Sample) : m))
-    .filter((s) => typeof s?.t === 'number' && typeof s?.yt === 'number')
-    .sort((a, b) => a.t - b.t)
+  return raw.map(parse).filter(valid).sort((a, b) => a.t - b.t)
 }
 
 export async function appendSample(id: string, s: Sample): Promise<void> {
   const r = getRedis()
-  if (!r) return
+  if (!r) {
+    const all = (await fileRead(id)).filter((x) => x.t >= s.t - RETENTION_S && x.t !== s.t)
+    all.push(s)
+    all.sort((a, b) => a.t - b.t)
+    return fileWrite(id, all)
+  }
   const key = historyKey(id)
   await r.zadd(key, { score: s.t, member: JSON.stringify(s) })
-  await r.zremrangebyscore(key, 0, s.t - (CHART_DAYS + 2) * 86_400)
+  await r.zremrangebyscore(key, 0, s.t - RETENTION_S)
 }
 
 export async function lastSampleTs(id: string): Promise<number | null> {
   const r = getRedis()
-  if (!r) return null
+  if (!r) {
+    const all = await fileRead(id)
+    return all.length ? all[all.length - 1].t : null
+  }
   const last = await r.zrange<(string | Sample)[]>(historyKey(id), -1, -1)
-  const m = last[0]
-  if (!m) return null
-  const s = typeof m === 'string' ? (JSON.parse(m) as Sample) : m
-  return s.t
+  return last[0] ? parse(last[0]).t : null
 }
