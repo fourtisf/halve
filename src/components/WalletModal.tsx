@@ -147,7 +147,7 @@ export function WalletModal() {
             </button>
           )}
         </div>
-        <div className="note">Network: Robinhood Chain ({CHAIN_ID}). You&apos;ll be asked to add or switch to it after connecting.{!HAS_WALLETCONNECT && ' Mobile wallets and WalletConnect appear once NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is set.'}</div>
+        <div className="note">Network: Robinhood Chain ({CHAIN_ID}). You&apos;ll be asked to add or switch to it after connecting.{!HAS_WALLETCONNECT && ' Mobile wallets via WalletConnect are coming soon; use a browser extension for now.'}</div>
       </div>
     </div>
   )
