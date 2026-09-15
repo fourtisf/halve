@@ -51,3 +51,7 @@ next-env.d.ts
 # second build for the anvil e2e run (scripts/e2e-live.mjs)
 /.next-live/
 /.e2e-live/
+
+# mainnet deployment secrets (scripts/mainnet.mjs)
+.env.mainnet
+!.env.mainnet.example

@@ -32,6 +32,9 @@ export type Series = {
   lend?: LendParams // Morpho market presentation params
   morphoMarketId?: Hex // Morpho Blue market id (bytes32) for the pPT/USDC market
   deployBlock?: number // vault deployment block: lower bound for activity log scans
+  /** What the PT / YT pools are quoted in: the rebasing stock itself, or its non-rebasing wrapper (wStock, recommended). */
+  quote: 'stock' | 'wrapped'
+  quoteToken: Address // pool quote asset (underlying for 'stock', the WrappedStock for 'wrapped')
 }
 
 type RawSeries = {
@@ -54,6 +57,8 @@ type RawSeries = {
   lend?: LendParams
   morphoMarketId?: string
   deployBlock?: number
+  quote?: string
+  quoteToken?: string
 }
 
 // SERIES_FILE=path at build time replaces series.json (next.config.ts inlines it as NEXT_PUBLIC_SERIES_JSON).
@@ -87,6 +92,8 @@ function parse(r: RawSeries): Series {
     lend: r.lend,
     morphoMarketId: marketId,
     deployBlock: typeof r.deployBlock === 'number' && r.deployBlock >= 0 ? r.deployBlock : undefined,
+    quote: r.quote === 'wrapped' ? 'wrapped' : 'stock',
+    quoteToken: r.quote === 'wrapped' && r.quoteToken ? addr(r.quoteToken, 'quoteToken', r.id) : addr(r.underlying, 'underlying', r.id),
   }
 }
 

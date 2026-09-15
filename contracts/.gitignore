@@ -2,3 +2,6 @@ out/
 cache/
 broadcast/
 series.local.json
+pools.local.json
+wrapped.local.json
+deployments/

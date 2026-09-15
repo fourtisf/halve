@@ -3,11 +3,12 @@ import { useQuery } from '@tanstack/react-query'
 import { usePublicClient } from 'wagmi'
 import { getAbiItem, type PublicClient } from 'viem'
 import type { Series } from '@/contracts/types'
-import { uniswapV3PoolAbi } from '@/contracts/abis'
+import { stockTokenAbi, uniswapV3PoolAbi } from '@/contracts/abis'
 import { CHART_DAYS, CHART_POINTS } from '@/contracts/constants'
 import { BLOCK_TIME_MS } from '@/lib/env'
 import { MOCK_CHART_CHANGE, MOCK_TVL_CHANGE_7D, MOCK_YT_CHANGE_24H, mockChart } from '@/lib/mock'
 import { poolPrice } from '@/lib/math'
+import { quoteToStock } from '@/lib/stats'
 import { resample, type Resampled, type Sample } from '@/lib/history'
 import { CHAIN_ID } from '@/lib/wagmi'
 import { isMockSeries } from './useSeries'
@@ -29,12 +30,14 @@ async function fromKv(s: Series): Promise<YtHistory | null> {
 /** 2. Fallback: build the line from the YT pool's Swap events (shrinks the window if the RPC rejects the range). */
 async function fromLogs(client: PublicClient, s: Series): Promise<YtHistory> {
   const latest = await client.getBlockNumber()
-  const [token0, slot0] = await Promise.all([
+  const [token0, slot0, m] = await Promise.all([
     client.readContract({ address: s.poolYT, abi: uniswapV3PoolAbi, functionName: 'token0' }),
     client.readContract({ address: s.poolYT, abi: uniswapV3PoolAbi, functionName: 'slot0' }),
+    s.quote === 'wrapped' ? client.readContract({ address: s.underlying, abi: stockTokenAbi, functionName: 'uiMultiplier' }) : Promise.resolve(undefined),
   ])
   const ytIsToken0 = token0.toLowerCase() === s.yt.toLowerCase()
-  const price = (sqrt: bigint) => poolPrice(sqrt, ytIsToken0, s.decimals, s.decimals)
+  const q = quoteToStock(s, m)
+  const price = (sqrt: bigint) => poolPrice(sqrt, ytIsToken0, s.decimals, s.decimals) * q
   const current = price(slot0[0])
   const blocksPerDay = BigInt(Math.max(1, Math.round(86_400_000 / BLOCK_TIME_MS)))
 

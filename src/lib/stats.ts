@@ -1,7 +1,7 @@
 /** Pure helpers behind useSeriesStats: multicall layout and result parsing. Unit-tested. */
 import type { Address, ContractFunctionParameters } from 'viem'
 import type { Series } from '@/contracts/types'
-import { chainlinkAggregatorAbi, erc20Abi, multiplierAccountantAbi, stripVaultAbi, uniswapV3PoolAbi } from '@/contracts/abis'
+import { chainlinkAggregatorAbi, erc20Abi, multiplierAccountantAbi, stockTokenAbi, stripVaultAbi, uniswapV3PoolAbi } from '@/contracts/abis'
 import type { SeriesStats } from './types'
 import { accruedFrom, fixedApy, impliedDividendYield, leverage, poolPrice, toNumber, wadToNumber, yearsToMaturity } from './math'
 
@@ -12,7 +12,7 @@ export function ok<T>(data: readonly ReadResult[] | undefined, i: number): T | u
   return r && r.status === 'success' ? (r.result as T) : undefined
 }
 
-export const STATS_PER_SERIES = 17
+export const STATS_PER_SERIES = 18
 
 export function statsContracts(s: Series): ContractFunctionParameters[] {
   return [
@@ -33,7 +33,13 @@ export function statsContracts(s: Series): ContractFunctionParameters[] {
     { address: s.yt, abi: erc20Abi, functionName: 'decimals' },
     { address: s.priceFeed, abi: chainlinkAggregatorAbi, functionName: 'latestRoundData' },
     { address: s.priceFeed, abi: chainlinkAggregatorAbi, functionName: 'decimals' },
+    { address: s.underlying, abi: stockTokenAbi, functionName: 'uiMultiplier' },
   ]
+}
+
+/** Stock UI units per pool quote unit: 1 for pools quoted in the stock, uiMultiplier for pools quoted in wStock. */
+export function quoteToStock(s: Series, uiMultiplier: bigint | undefined): number {
+  return s.quote === 'wrapped' && uiMultiplier !== undefined && uiMultiplier > 0n ? wadToNumber(uiMultiplier) : 1
 }
 
 export type Slot0 = readonly [bigint, number, number, number, number, number, boolean]
@@ -60,9 +66,11 @@ export function parseStats(s: Series, data: readonly ReadResult[] | undefined, b
   const ytDec = Number(ok<number>(data, base + 14) ?? stockDec)
   const round = ok<Round>(data, base + 15)
   const feedDec = Number(ok<number>(data, base + 16) ?? 8)
+  const q = quoteToStock(s, ok<bigint>(data, base + 17))
 
-  const ptPrice = slotPT && token0PT ? poolPrice(slotPT[0], token0PT.toLowerCase() === s.pt.toLowerCase(), ptDec, stockDec) : 0
-  const ytPrice = slotYT && token0YT ? poolPrice(slotYT[0], token0YT.toLowerCase() === s.yt.toLowerCase(), ytDec, stockDec) : 0
+  // pool prices are in quote units (stock, or wStock shares); the app shows everything in stock UI units
+  const ptPrice = slotPT && token0PT ? poolPrice(slotPT[0], token0PT.toLowerCase() === s.pt.toLowerCase(), ptDec, stockDec) * q : 0
+  const ytPrice = slotYT && token0YT ? poolPrice(slotYT[0], token0YT.toLowerCase() === s.yt.toLowerCase(), ytDec, stockDec) * q : 0
   const years = yearsToMaturity(s.maturity, now)
   // Chainlink prices the token with the multiplier inside — do NOT multiply by uiMultiplier again.
   const usdPrice = round ? Number(round[1]) / 10 ** feedDec : 0

@@ -12,6 +12,7 @@
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { deployUniswap } from './lib/uniswap-local.mjs'
 
 const root = resolve(new URL('..', import.meta.url).pathname)
 const contracts = resolve(root, 'contracts')
@@ -52,7 +53,7 @@ async function waitForAnvil() {
   throw new Error('anvil did not come up')
 }
 
-const anvil = spawn(bin('anvil'), ['--chain-id', String(CHAIN_ID), '--port', new URL(RPC).port, '--silent'], { stdio: 'ignore' })
+const anvil = spawn(bin('anvil'), ['--chain-id', String(CHAIN_ID), '--port', new URL(RPC).port, '--silent', '--disable-code-size-limit'], { stdio: 'ignore' })
 const stop = () => { if (!anvil.killed) anvil.kill() }
 process.on('exit', stop)
 process.on('SIGINT', () => { stop(); process.exit(130) })
@@ -70,11 +71,24 @@ try {
     env: { ...process.env, OUT: 'series.local.json', FUND: USER, TICKER: process.env.TICKER ?? 'JEPI' },
   })
   const series = JSON.parse(readFileSync(seriesRaw, 'utf8'))
-  const seriesFile = resolve(outDir, 'series.json')
-  writeFileSync(seriesFile, JSON.stringify([series], null, 2))
   const mc = JSON.parse(readFileSync(resolve(contracts, 'out/Multicall3.sol/Multicall3.json'), 'utf8'))
   await rpc('anvil_setCode', [MULTICALL3, mc.deployedBytecode.object])
-  console.log(`series ${series.id}: vault ${series.vault}, stock ${series.underlying}`)
+
+  // real Uniswap v3 pools quoted in wStock, exactly as on mainnet (the mock pools stay as a fallback)
+  const forgeEnv = { ...process.env, PATH: process.env.PATH }
+  sh(bin('forge'), ['script', 'script/DeployWrappedStock.s.sol', '--rpc-url', RPC, '--broadcast', '--private-key', DEPLOYER_KEY, '-q'], {
+    cwd: contracts, env: { ...forgeEnv, STOCK: series.underlying, OUT: 'wrapped.local.json' },
+  })
+  const { wrappedStock } = JSON.parse(readFileSync(resolve(contracts, 'wrapped.local.json'), 'utf8'))
+  const uni = await deployUniswap(RPC, DEPLOYER_KEY, series.underlying)
+  sh(bin('forge'), ['script', 'script/CreatePools.s.sol:SeedPools', '--rpc-url', RPC, '--broadcast', '--private-key', DEPLOYER_KEY, '-q'], {
+    cwd: contracts, env: { ...forgeEnv, VAULT: series.vault, WSTOCK: wrappedStock, NPM: uni.npm, OUT: 'pools.local.json' },
+  })
+  const pools = JSON.parse(readFileSync(resolve(contracts, 'pools.local.json'), 'utf8'))
+  Object.assign(series, { poolPT: pools.poolPT, poolYT: pools.poolYT, quote: 'wrapped', quoteToken: wrappedStock })
+  const seriesFile = resolve(outDir, 'series.json')
+  writeFileSync(seriesFile, JSON.stringify([series], null, 2))
+  console.log(`series ${series.id}: vault ${series.vault}, stock ${series.underlying}, wStock ${wrappedStock}, pools ${pools.poolPT} / ${pools.poolYT} (Uniswap v3 ${uni.factory})`)
 
   // 2. site
   const env = {

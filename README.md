@@ -104,6 +104,9 @@ pnpm abis                          # from the repo root: copies compiled ABIs in
 
 ### Deploying a series
 
+`docs/MAINNET.md` is the mainnet runbook: `node scripts/mainnet.mjs` deploys a series, its wStock quote
+asset and the Uniswap v3 pools, writes `series.json` and runs the preflight, from a `.env.mainnet` file.
+
 ```bash
 # 1. local: everything mocked on anvil (what `pnpm test:e2e:live` does)
 anvil --chain-id 4663 &

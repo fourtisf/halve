@@ -15,7 +15,9 @@
     "check:live": "node scripts/check-live.mjs",
     "abis": "node scripts/sync-abis.mjs",
     "contracts:test": "cd contracts && forge test",
-    "test:e2e:live": "node scripts/e2e-live.mjs"
+    "test:e2e:live": "node scripts/e2e-live.mjs",
+    "rehearse:mainnet": "node scripts/rehearse-mainnet.mjs",
+    "deploy:mainnet": "node scripts/mainnet.mjs"
   },
   "dependencies": {
     "@rainbow-me/rainbowkit": "^2.2.11",
@@ -35,6 +37,8 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@uniswap/v3-core": "1.0.1",
+    "@uniswap/v3-periphery": "1.4.4",
     "eslint": "^9",
     "eslint-config-next": "15.5.25",
     "tailwindcss": "^4",

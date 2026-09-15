@@ -66,7 +66,7 @@ test.describe.serial('live chain', () => {
     await expect(first(page, '#kYt')).toHaveText('0.040') // MockV3Pool priced YT at 0.04 stock
     await expect(first(page, '#kAcc')).toHaveText('0.0%')
     await expect(first(page, '#kEv')).toHaveText('0 events')
-    await expect(first(page, '#kTvl')).toHaveText('$0K')
+    await expect(first(page, '#kTvl')).toHaveText('$570K') // 9,990 base units seeded into the pools × $57.10
     await expect(page.locator('#ledger tr').first()).toContainText('No events yet this term')
     await expect(first(page, '#blk')).toHaveText(/block \d/)
     await page.goto('/oracle')
@@ -91,8 +91,7 @@ test.describe.serial('live chain', () => {
     await expect(page.locator('#txlink')).toHaveAttribute('href', /blockscout\.com\/tx\/0x[0-9a-f]{64}$/)
     await expect(page.locator('#pos')).toContainText('9.990')
     await expect(first(page, '#bal')).toHaveText('990.00')
-    await expect(first(page, '#kTvl')).toHaveText('$1K') // 9.99 × $57.10
-    expect(await pub.readContract({ address: SERIES.vault, abi: vaultAbi, functionName: 'totalDeposits' })).toBe(parseEther('9.99'))
+    expect(await pub.readContract({ address: SERIES.vault, abi: vaultAbi, functionName: 'totalDeposits' })).toBe(parseEther('9999.99')) // 9,990 seeded + 9.99
 
     await page.click('#tMerge')
     await expect(first(page, '#bal')).toHaveText('9.99')

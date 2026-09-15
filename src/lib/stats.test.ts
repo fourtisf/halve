@@ -7,7 +7,7 @@ const A = (n: number): Address => `0x${n.toString(16).padStart(40, '0')}` as Add
 const series: Series = {
   id: 'T-MAR27', ticker: 'T', name: 'Test', issuer: 'Robinhood',
   underlying: A(1), vault: A(2), pt: A(3), yt: A(4), accountant: A(5), poolPT: A(6), poolYT: A(7), priceFeed: A(8),
-  maturity: 1_806_451_200, cap: 100n * 10n ** 18n, decimals: 18,
+  maturity: 1_806_451_200, cap: 100n * 10n ** 18n, decimals: 18, quote: 'stock', quoteToken: A(1),
 }
 const Q96 = 2n ** 96n
 const sqrtFor = (p: number) => BigInt(Math.round(Math.sqrt(p) * 1e9)) * Q96 / 1_000_000_000n
@@ -32,6 +32,7 @@ function results(over: Partial<Record<number, ReadResult>> = {}): ReadResult[] {
     okr(18), okr(18), okr(18), // decimals
     okr([1n, 5_710_000_000n, 0n, 0n, 1n]), // latestRoundData: $57.10 with 8 decimals
     okr(8), // feed decimals
+    okr(WAD), // stock uiMultiplier
   ]
   return base.map((r, i) => over[i] ?? r)
 }
@@ -58,6 +59,14 @@ describe('parseStats', () => {
     expect(st.events).toBe(4)
     expect(st.isSynced).toBe(true)
     expect(st.isMock).toBe(false)
+  })
+  it('converts wStock-quoted pool prices into stock units with the multiplier', () => {
+    const wrapped: Series = { ...series, quote: 'wrapped', quoteToken: A(9) }
+    const st = parseStats(wrapped, results({ 17: okr(1_006_500_000_000_000_000n) }), 0, now)
+    expect(st.ptPrice).toBeCloseTo(0.9587 * 1.0065, 4)
+    expect(st.ytPrice).toBeCloseTo(0.0413 * 1.0065, 4)
+    // pools quoted in the stock itself ignore the multiplier
+    expect(parseStats(series, results({ 17: okr(1_006_500_000_000_000_000n) }), 0, now).ptPrice).toBeCloseTo(0.9587, 4)
   })
   it('respects the base offset for batched series', () => {
     const data = [...results().map(() => fail), ...results()]
