@@ -19,7 +19,7 @@ export function Hero() {
   return (
     <header className="hero">
       <div className="wrap">
-        <div className="eyebrow"><i />Live on Robinhood Chain · Audited by Pashov</div>
+        <div className="eyebrow"><i />Live on Robinhood Chain · Open source</div>
         <h1>Lock in a fixed yield on your stock tokens. Or buy the dividends outright.</h1>
         <p>Halve splits a tokenized stock or ETF into two things you can own separately: the share at a discount, and every dividend it pays until a fixed date. Starting with the assets that actually pay.</p>
         <div className="cta"><Link className="btn btn-white btn-lg" href="/app">Start earning</Link><a className="btn btn-line btn-lg" href="#how">See how it works</a></div>

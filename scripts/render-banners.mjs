@@ -1,0 +1,152 @@
+#!/usr/bin/env node
+/**
+ * Renders the X banners from HTML with the site's own tokens (black, Inter, Geist Mono, gold #E8C170,
+ * the Stack mark) so they match halve.finance exactly. Output: public/brand/x/.
+ *   node scripts/render-banners.mjs
+ */
+import { chromium } from '@playwright/test'
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+const root = resolve(new URL('..', import.meta.url).pathname)
+const out = resolve(root, 'public/brand/x')
+mkdirSync(out, { recursive: true })
+
+/**
+ * The exact font files the site ships: next/font writes @font-face rules into .next/static/css and the
+ * woff2 files into .next/static/media. Embedding them as data: URIs keeps the render offline and pixel-true.
+ * Falls back to Google Fonts when there is no build yet (`pnpm build` first for a faithful render).
+ */
+function fontCss() {
+  const staticDir = resolve(root, '.next/static')
+  if (!existsSync(staticDir)) return `<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">`
+  const cssFiles = readdirSync(staticDir, { recursive: true }).map(String).filter((f) => f.endsWith('.css'))
+  const faces = []
+  for (const f of cssFiles) {
+    const css = readFileSync(resolve(staticDir, f), 'utf8')
+    for (const m of css.matchAll(/@font-face\{([^}]*)\}/g)) {
+      const block = m[1]
+      const family = /font-family:\s*['"]?([^;'"]+)['"]?/.exec(block)?.[1]?.trim()
+      const url = /url\(([^)]+\.woff2)\)/.exec(block)?.[1]
+      if (!family || !url || family.endsWith('Fallback')) continue
+      const file = url.startsWith('/_next/') ? resolve(root, '.next', url.slice('/_next/'.length)) : resolve(staticDir, f, '..', url)
+      if (!existsSync(file)) continue
+      const b64 = readFileSync(file).toString('base64')
+      const weight = /font-weight:\s*([^;]+)/.exec(block)?.[1] ?? '400'
+      const style = /font-style:\s*([^;]+)/.exec(block)?.[1] ?? 'normal'
+      const range = /unicode-range:\s*([^;]+)/.exec(block)?.[1]
+      faces.push(`@font-face{font-family:'${family}';font-weight:${weight};font-style:${style};${range ? `unicode-range:${range};` : ''}src:url(data:font/woff2;base64,${b64}) format('woff2')}`)
+    }
+  }
+  console.log(`embedded ${faces.length} font face(s) from the build`)
+  return `<style>${faces.join('\n')}</style>`
+}
+
+const MARK = (s, ink = '#FAFAFA', gold = '#E8C170') => `<svg width="${s}" height="${s}" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" style="display:block;flex-shrink:0"><rect x="8" y="44" width="48" height="10" rx="3" fill="${ink}"/><rect x="8" y="30" width="48" height="10" rx="3" fill="${ink}"/><rect x="14" y="10" width="48" height="10" rx="3" fill="${gold}"/></svg>`
+const XGLYPH = (s, c = '#FAFAFA') => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="display:block"><path fill="${c}" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>`
+
+const BASE = `
+${fontCss()}
+<style>
+:root{--bg:#000;--bg1:#0A0A0A;--bg2:#121212;--fg:#FAFAFA;--fg2:#A1A1A1;--fg3:#6B6B6B;--line:#1F1F1F;--line2:#2E2E2E;--yt:#E8C170;--green:#3DD68C}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#000;color:var(--fg);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-feature-settings:"cv11","ss01";line-height:1.5}
+.mono{font-family:'Geist Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.frame{position:relative;overflow:hidden;background:#000}
+.glow{position:absolute;border-radius:50%;pointer-events:none}
+.lockup{position:absolute;display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:-.02em}
+.eyebrow{display:inline-flex;align-items:center;gap:9px;color:var(--fg2);border:1px solid var(--line2);border-radius:99px;background:var(--bg1)}
+.eyebrow i{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 9px var(--green)}
+.eyebrow i.y{background:var(--yt);box-shadow:0 0 9px var(--yt)}
+h1{font-weight:500;letter-spacing:-.045em;line-height:1.02;background:linear-gradient(180deg,#fff 40%,#8A8A8A);-webkit-background-clip:text;background-clip:text;color:transparent}
+p{color:var(--fg2);line-height:1.55}
+.chip{border:1px solid var(--line2);background:var(--bg1);border-radius:14px;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.chip small{font-family:'Geist Mono',ui-monospace,monospace;color:var(--fg3)}
+.chip b{font-weight:500;letter-spacing:-.03em;color:var(--fg)}
+.chip.y b{color:var(--yt)}
+.chip.y{border-color:rgba(232,193,112,.35);box-shadow:0 0 40px rgba(232,193,112,.08)}
+.arrow{color:var(--fg3);display:flex;align-items:center;justify-content:center}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;font-weight:500;border:1px solid transparent;border-radius:12px;white-space:nowrap}
+.btn-white{background:var(--fg);color:#000}.btn-line{border-color:var(--line2);color:var(--fg)}
+.foot{position:absolute;color:var(--fg3)}
+</style>`
+
+/** 1 share → 1 PT + 1 YT, the product in one glance. */
+const splitVisual = (scale = 1) => {
+  const w = 168 * scale, h = 72 * scale, gap = 14 * scale
+  const chip = (cls, k, v) => `<div class="chip ${cls}" style="width:${w}px;height:${h}px;padding:0 ${18 * scale}px"><small style="font-size:${11 * scale}px">${k}</small><b style="font-size:${22 * scale}px">${v}</b></div>`
+  return `<div style="display:flex;align-items:center;gap:${gap}px">
+    ${chip('', 'stock token', '1 share')}
+    <div class="arrow" style="width:${28 * scale}px;font-size:${22 * scale}px">→</div>
+    <div style="display:flex;flex-direction:column;gap:${gap}px">${chip('', 'principal · PT', '1 PT')}${chip('y', 'yield · YT', '1 YT')}</div>
+  </div>`
+}
+
+const header = `${BASE}
+<div class="frame" style="width:1500px;height:500px">
+  <div class="glow" style="left:-120px;top:-260px;width:1100px;height:900px;background:radial-gradient(closest-side,rgba(232,193,112,.11),transparent)"></div>
+  <div class="glow" style="right:-200px;top:-100px;width:700px;height:700px;background:radial-gradient(closest-side,rgba(255,255,255,.04),transparent)"></div>
+  <div class="lockup" style="left:72px;top:52px;font-size:22px">${MARK(28)}Halve</div>
+  <div class="mono foot" style="right:72px;top:58px;font-size:13px">halve.finance · @Halvefinance</div>
+  <div style="position:absolute;left:72px;top:142px;width:820px">
+    <div class="eyebrow" style="font-size:13px;padding:6px 13px"><i></i>Live on Robinhood Chain</div>
+    <h1 style="font-size:56px;margin:18px 0 16px;white-space:nowrap">Fixed yield and dividend<br>tokens for tokenized stocks.</h1>
+    <p style="font-size:19px;max-width:640px">Split a share into the share at a discount and every dividend it pays until a fixed date. Merge back any time, for free.</p>
+  </div>
+  <div style="position:absolute;right:72px;top:170px">${splitVisual(1.06)}</div>
+</div>`
+
+const follow = `${BASE}
+<div class="frame" style="width:1600px;height:900px">
+  <div class="glow" style="left:-160px;top:-300px;width:1200px;height:1000px;background:radial-gradient(closest-side,rgba(232,193,112,.10),transparent)"></div>
+  <div class="lockup" style="left:96px;top:80px;font-size:24px">${MARK(30)}Halve</div>
+  <div class="mono foot" style="right:96px;top:88px;font-size:14px">halve.finance</div>
+  <div style="position:absolute;left:96px;top:250px;width:900px">
+    <div class="eyebrow" style="font-size:14px;padding:7px 14px"><i class="y"></i>Now on X</div>
+    <h1 style="font-size:84px;margin:26px 0 22px">Follow @Halvefinance</h1>
+    <p style="font-size:24px;max-width:760px">Series launches, contract addresses and the $HALVE contract address are announced there first. Nothing is real until you read it on that account.</p>
+    <div style="display:flex;gap:12px;margin-top:38px">
+      <div class="btn btn-white" style="height:56px;padding:0 26px;font-size:18px">${XGLYPH(18, '#000')}x.com/Halvefinance</div>
+      <div class="btn btn-line" style="height:56px;padding:0 26px;font-size:18px">halve.finance</div>
+    </div>
+  </div>
+  <div style="position:absolute;right:96px;top:230px;width:400px;height:400px;border:1px solid var(--line);border-radius:32px;background:var(--bg1);display:flex;align-items:center;justify-content:center;box-shadow:0 0 120px rgba(232,193,112,.10)">
+    <div class="glow" style="left:50%;top:50%;width:420px;height:420px;transform:translate(-50%,-50%);background:radial-gradient(closest-side,rgba(232,193,112,.14),transparent)"></div>
+    ${XGLYPH(176)}
+  </div>
+  <div class="mono foot" style="right:96px;top:660px;width:400px;text-align:center;font-size:14px">@Halvefinance</div>
+  <div class="mono foot" style="left:96px;bottom:72px;font-size:14px">halve.finance · @Halvefinance</div>
+  <div class="mono foot" style="right:96px;bottom:72px;font-size:14px">Live on Robinhood Chain · 4663</div>
+</div>`
+
+const web = `${BASE}
+<div class="frame" style="width:1600px;height:900px">
+  <div class="glow" style="left:50%;top:-200px;width:1200px;height:900px;transform:translateX(-50%);background:radial-gradient(closest-side,rgba(232,193,112,.10),transparent)"></div>
+  <div class="lockup" style="left:50%;top:104px;transform:translateX(-50%);font-size:24px">${MARK(30)}Halve</div>
+  <div style="position:absolute;left:0;right:0;top:214px;text-align:center">
+    <div class="eyebrow" style="font-size:14px;padding:7px 14px"><i></i>Live on Robinhood Chain</div>
+    <h1 style="font-size:80px;margin:26px auto 22px;max-width:1100px">Lock in a fixed yield on your stock tokens. Or buy the dividends outright.</h1>
+    <p style="font-size:24px;max-width:780px;margin:0 auto">One share in, the share and its dividends out, as two tokens you can hold, trade or merge back for free.</p>
+  </div>
+  <div style="position:absolute;left:50%;top:640px;transform:translateX(-50%)">${splitVisual(1.05)}</div>
+  <div class="mono foot" style="left:0;right:0;bottom:40px;text-align:center;font-size:14px">halve.finance · @Halvefinance</div>
+</div>`
+
+const jobs = [
+  { name: 'halve-x-header-premium-1500x500.png', html: header, w: 1500, h: 500, scale: 1 },
+  { name: 'halve-x-header-premium-3000x1000.png', html: header, w: 1500, h: 500, scale: 2 },
+  { name: 'halve-x-post-follow-1600x900.png', html: follow, w: 1600, h: 900, scale: 1 },
+  { name: 'halve-x-post-hero-1600x900.png', html: web, w: 1600, h: 900, scale: 1 },
+]
+
+const browser = await chromium.launch()
+for (const j of jobs) {
+  const page = await browser.newPage({ viewport: { width: j.w, height: j.h }, deviceScaleFactor: j.scale })
+  await page.setContent(j.html, { waitUntil: 'networkidle' })
+  await page.evaluate(() => document.fonts.ready)
+  await page.waitForTimeout(200)
+  await page.screenshot({ path: resolve(out, j.name), clip: { x: 0, y: 0, width: j.w, height: j.h } })
+  await page.close()
+  console.log('wrote', j.name)
+}
+await browser.close()

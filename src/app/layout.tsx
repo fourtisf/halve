@@ -6,6 +6,7 @@ import { Providers } from '@/lib/providers'
 import { SITE_URL } from '@/lib/env'
 import { X_HANDLE } from '@/lib/links'
 import { Nav } from '@/components/Nav'
+import { Announce } from '@/components/Announce'
 import { Footer } from '@/components/Footer'
 import { WalletModal } from '@/components/WalletModal'
 import { Toast } from '@/components/Toast'
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en" className={`${inter.variable} ${geistMono.variable}`}>
       <body>
         <Providers>
+          <Announce />
           <Nav />
           {children}
           <Footer />

@@ -8,7 +8,8 @@ import { useIsMounted } from '@/hooks/useIsMounted'
 import { useWalletModal } from '@/lib/walletModal'
 import { shortAddr } from '@/lib/format'
 import { CHAIN_ID } from '@/lib/wagmi'
-import { LINKS, externalProps, isExternal } from '@/lib/links'
+import { LINKS, X_HANDLE, externalProps, isExternal } from '@/lib/links'
+import { XIcon } from './XIcon'
 import { HalveLogo } from './Logo'
 
 const NAV = [
@@ -36,10 +37,11 @@ export function Nav() {
   const pathname = usePathname()
   const [menu, setMenu] = useState(false)
   useEffect(() => setMenu(false), [pathname])
-  const links = (cls?: string) => (
+  const links = (cls?: string, mobile = false) => (
     <>
       {NAV.map((l) => <Link key={l.href} href={l.href} className={pathname === l.href ? 'on' : cls}>{l.label}</Link>)}
       {isExternal(LINKS.docs) ? <a href={LINKS.docs} {...externalProps(LINKS.docs)}>Docs</a> : <Link href={LINKS.docs} className={pathname === LINKS.docs ? 'on' : cls}>Docs</Link>}
+      {mobile && <a href={LINKS.x} target="_blank" rel="noopener noreferrer" className="xlink"><XIcon size={12} />{X_HANDLE} ↗</a>}
     </>
   )
   return (
@@ -48,6 +50,7 @@ export function Nav() {
         <Link className="logo" href="/"><HalveLogo /></Link>
         <div className="links" id="navlinks">{links()}</div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <a className="btn btn-line xbtn" id="xnav" href={LINKS.x} target="_blank" rel="noopener noreferrer" aria-label={`Halve on X (${X_HANDLE})`} title={X_HANDLE}><XIcon size={14} /></a>
           <WalletNavButton />
           <Link className="btn btn-white" href="/app">Launch app</Link>
           <button className="menu-btn" id="menubtn" aria-label="Menu" aria-expanded={menu} aria-controls="mobilelinks" onClick={() => setMenu((m) => !m)}>
@@ -57,7 +60,7 @@ export function Nav() {
           </button>
         </div>
       </div>
-      <div className={'mobile-links' + (menu ? ' open' : '')} id="mobilelinks"><div className="wrap">{links()}</div></div>
+      <div className={'mobile-links' + (menu ? ' open' : '')} id="mobilelinks"><div className="wrap">{links(undefined, true)}</div></div>
     </nav>
   )
 }

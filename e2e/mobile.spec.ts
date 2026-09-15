@@ -7,6 +7,8 @@ test('mobile: menu toggles links, app layout stacks, markets table scrolls', asy
   await expect(page.locator('#mobilelinks')).toBeVisible()
   const [panel, hero] = await Promise.all([page.locator('#mobilelinks').boundingBox(), page.locator('.hero .eyebrow').boundingBox()])
   expect(hero!.y).toBeGreaterThanOrEqual(panel!.y + panel!.height) // menu pushes content down, never overlaps it
+  await expect(page.locator('#mobilelinks a.xlink')).toHaveAttribute('href', 'https://x.com/Halvefinance')
+  await expect(page.locator('#xnav')).toBeHidden() // icon button is desktop-only; the menu carries the link on phones
   await page.locator('#mobilelinks a', { hasText: 'App' }).click()
   await page.waitForURL(/\/app/)
   await expect(page.locator('#mobilelinks')).toBeHidden()

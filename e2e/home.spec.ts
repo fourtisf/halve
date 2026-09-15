@@ -29,4 +29,21 @@ test.describe('home (mock mode)', () => {
     await expect(page.locator('footer')).toContainText("Yield tokens are a claim on the issuer's declared dividend reinvestment, not on the underlying equity. Not investment advice. Not available where the underlying stock tokens are not available.")
     await expect(page.getByRole('button', { name: /claim/i })).toHaveCount(0)
   })
+
+  test('X is linked from the announcement bar, nav, CTA and footer; the bar can be dismissed and stays dismissed', async ({ page }) => {
+    await page.goto('/')
+    const x = 'https://x.com/Halvefinance'
+    await expect(page.locator('#announceLink')).toHaveAttribute('href', x)
+    await expect(page.locator('#announce')).toContainText('Follow @Halvefinance')
+    await expect(page.locator('#xnav')).toHaveAttribute('href', x)
+    await expect(page.locator('#xnav')).toHaveAttribute('target', '_blank')
+    await expect(page.locator('#xcta')).toHaveAttribute('href', x)
+    await expect(page.locator('#xfooter')).toHaveAttribute('href', x)
+    await expect(page.locator('#xfooter')).toContainText('@Halvefinance')
+    await expect(page.locator('.hero .eyebrow')).toHaveText('Live on Robinhood Chain · Open source')
+    await page.click('#announceClose')
+    await expect(page.locator('#announce')).toHaveCount(0)
+    await page.reload()
+    await expect(page.locator('#announce')).toHaveCount(0)
+  })
 })
