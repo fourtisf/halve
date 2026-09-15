@@ -1,8 +1,7 @@
 import Link from 'next/link'
 import { zeroAddress } from 'viem'
 import { SERIES, hasPlaceholderAddresses } from '@/contracts/types'
-import { explorerAddress } from '@/lib/chain'
-import { CHAIN_ID } from '@/lib/chain'
+import { CHAIN_ID, explorerAddress } from '@/lib/chain'
 import { monthYear } from '@/lib/format'
 import { Prose } from './Prose'
 

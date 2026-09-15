@@ -44,7 +44,7 @@ export function MockPositionProvider({ children }: { children: ReactNode }) {
   }, [])
   const record = useCallback((row: ActivityRow) => {
     setState((prev) => {
-      const next = { ...prev, log: [...prev.log, row].slice(-200) }
+      const next = { ...prev, log: [...prev.log, { ...row, seq: (prev.log[prev.log.length - 1]?.seq ?? -1) + 1 }].slice(-200) }
       save(next)
       return next
     })

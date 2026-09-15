@@ -1,6 +1,5 @@
 'use client'
 import { useMemo } from 'react'
-import { useSeries } from '@/hooks/useSeries'
 import { useAllSeriesStats } from '@/hooks/useSeriesStats'
 import { useAllPositions } from '@/hooks/useAllPositions'
 import { useActivity } from '@/hooks/useActivity'
@@ -14,7 +13,6 @@ const signed = (n: number, d: number) => (n > 0 ? '+' : n < 0 ? '−' : '') + f(
 
 /** Portfolio → Activity: the wallet's splits / merges / redemptions and a PnL per series (in stock and USD). */
 export function Activity() {
-  const series = useSeries()
   const { stats } = useAllSeriesStats()
   const { rows: positions, connected } = useAllPositions()
   const act = useActivity()
@@ -36,7 +34,7 @@ export function Activity() {
       {act.isLoading ? (
         <div className="meta" style={{ margin: 0 }}><div><span>Reading vault events</span><b><Skel w={60} /></b></div></div>
       ) : act.rows.length === 0 ? (
-        <div className="meta" style={{ margin: 0 }}><div><span>No transactions yet{series.length ? '' : ''}</span><b>—</b></div></div>
+        <div className="meta" style={{ margin: 0 }}><div><span>No transactions yet</span><b>—</b></div></div>
       ) : (
         <div className="card" style={{ borderRadius: 10 }}><table className="ledger act">
           <thead><tr><th>When</th><th>Series</th><th>Action</th><th>Stock</th><th>PT / YT</th><th>Tx</th></tr></thead>

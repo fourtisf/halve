@@ -10,8 +10,9 @@ const rows: ActivityRow[] = [
 describe('activity', () => {
   it('sorts newest first, later insertions first on a tie', () => {
     expect(sortActivity(rows).map((r) => r.ts)).toEqual([200, 150, 100])
-    const tie = sortActivity([{ ...rows[0], ts: 5 }, { ...rows[1], ts: 5 }])
+    const tie = sortActivity([{ ...rows[0], ts: 5, seq: 0 }, { ...rows[1], ts: 5, seq: 1 }])
     expect(tie.map((r) => r.action)).toEqual(['Merge', 'Split'])
+    expect(sortActivity(tie).map((r) => r.action)).toEqual(['Merge', 'Split']) // idempotent
   })
   it('sums deposits and withdrawals per series and values holdings at pool prices', () => {
     const { rows: pnl, total } = summarizePnl(rows, [

@@ -11,6 +11,7 @@ export type ActivityRow = {
   base: number // PT/YT units minted or burned
   txHash?: `0x${string}`
   block?: number
+  seq?: number // insertion counter for rows without a block (demo log), so same-second rows keep their order
 }
 
 export type PnlRow = {
@@ -25,12 +26,9 @@ export type PnlRow = {
 
 export type PnlInputs = { id: string; ticker: string; pt: number; yt: number; ptPrice: number; ytPrice: number; usdPrice: number }
 
-/** Newest first: by timestamp, then block, then reverse insertion order (a merge appended after a split in the same second stays on top). */
+/** Newest first: by timestamp, then block, then insertion counter. Idempotent, so sorting twice is safe. */
 export function sortActivity(rows: readonly ActivityRow[]): ActivityRow[] {
-  return rows
-    .map((r, i) => ({ r, i }))
-    .sort((a, b) => b.r.ts - a.r.ts || (b.r.block ?? 0) - (a.r.block ?? 0) || b.i - a.i)
-    .map((x) => x.r)
+  return [...rows].sort((a, b) => b.ts - a.ts || (b.block ?? 0) - (a.block ?? 0) || (b.seq ?? 0) - (a.seq ?? 0))
 }
 
 /** One PnL row per series that has activity or a balance. */
