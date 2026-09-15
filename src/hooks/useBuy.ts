@@ -7,7 +7,7 @@ import type { Series } from '@/contracts/types'
 import { uniswapV3PoolAbi } from '@/contracts/abis'
 import { POLL_MS } from '@/contracts/constants'
 import { CHAIN_ID, UNISWAP } from '@/lib/chain'
-import { applySlippage, bestQuote, candidateRoutes, encodePath, quoterV2Abi, swapRouter02Abi, type Direction, type Quote, type Route } from '@/lib/buy'
+import { applySlippage, bestQuote, candidateRoutes, encodePath, quoterV2Abi, swapDeadline, swapRouter02Abi, type Direction, type Quote, type Route } from '@/lib/buy'
 import { ADDRESS_THIS } from '@/lib/limit'
 import { toNumber } from '@/lib/math'
 import { MOCK_ETH_USD } from '@/lib/mock'
@@ -66,6 +66,7 @@ export function useBuy(series: Series, stats: SeriesStats, side: BuySide, payWit
     queryFn: () => quoteRoutes(client as PublicClient, series, side, payWith, direction, amountIn),
     enabled: !mock && !!client && amountIn > 0n,
     staleTime: POLL_MS,
+    gcTime: POLL_MS, // retyping an earlier amount must not execute a minutes-old quote
     refetchInterval: POLL_MS,
   })
 
@@ -105,26 +106,25 @@ export function useBuy(series: Series, stats: SeriesStats, side: BuySide, payWit
     if (!q.data || !address) { toast('No route for this amount yet'); return }
     const minOut = applySlippage(q.data.amountOut)
     const path = encodePath(q.data.route.tokens, q.data.route.fees)
+    // every swap goes through multicall(deadline, …) so a queued transaction cannot fill minutes later at the 1 % bound
+    const deadline = swapDeadline()
     if (sell) {
       const token = side === 'pt' ? series.pt : series.yt
       const approval = await tx.approvalStep(token, UNISWAP.router, amountIn)
-      if (payWith === 'eth') {
-        // swap to WETH held by the router, then unwrap to the wallet, in one transaction
-        const calls = [
+      const calls = payWith === 'eth'
+        ? [ // swap to WETH held by the router, then unwrap to the wallet, in one transaction
           encodeFunctionData({ abi: swapRouter02Abi, functionName: 'exactInput', args: [{ path, recipient: ADDRESS_THIS, amountIn, amountOutMinimum: minOut }] }),
           encodeFunctionData({ abi: swapRouter02Abi, functionName: 'unwrapWETH9', args: [minOut, address as Address] }),
         ]
-        await tx.run([approval, { address: UNISWAP.router, abi: swapRouter02Abi as Abi, functionName: 'multicall', args: [calls], label: 'sending' }], done)
-      } else {
-        await tx.run([approval, { address: UNISWAP.router, abi: swapRouter02Abi as Abi, functionName: 'exactInput', args: [{ path, recipient: address as Address, amountIn, amountOutMinimum: minOut }], label: 'sending' }], done)
-      }
+        : [encodeFunctionData({ abi: swapRouter02Abi, functionName: 'exactInput', args: [{ path, recipient: address as Address, amountIn, amountOutMinimum: minOut }] })]
+      await tx.run([approval, { address: UNISWAP.router, abi: swapRouter02Abi as Abi, functionName: 'multicall', args: [deadline, calls], label: 'sending' }], done)
       return
     }
-    const params = { path, recipient: address as Address, amountIn, amountOutMinimum: minOut }
+    const swap = encodeFunctionData({ abi: swapRouter02Abi, functionName: 'exactInput', args: [{ path, recipient: address as Address, amountIn, amountOutMinimum: minOut }] })
     await tx.run(
       [
         payWith === 'stock' ? await tx.approvalStep(series.underlying, UNISWAP.router, amountIn) : null,
-        { address: UNISWAP.router, abi: swapRouter02Abi as Abi, functionName: 'exactInput', args: [params], label: 'sending', value: payWith === 'eth' ? amountIn : undefined },
+        { address: UNISWAP.router, abi: swapRouter02Abi as Abi, functionName: 'multicall', args: [deadline, [swap]], label: 'sending', value: payWith === 'eth' ? amountIn : undefined },
       ],
       done,
     )

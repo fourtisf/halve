@@ -1,15 +1,17 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { DEFAULT_BLOCKED_COUNTRIES, countryFrom, isBlockedCountry, parseCountryList } from '@/lib/geo'
+import { DEFAULT_BLOCKED_COUNTRIES, countryFrom, geoHeader, isBlockedCountry, parseCountryList } from '@/lib/geo'
 
 /**
- * Geo-block for the transactional routes. The country comes from the edge in front of the app
- * (Vercel / Cloudflare headers, or a GeoIP module on the reverse proxy); with no header the request
- * passes and the in-app attestation is the only gate. The marketing pages are never blocked.
+ * Geo-block for the transactional routes. The country comes from ONE trusted header set by the edge in front of
+ * the app (GEO_HEADER; see lib/geo.ts for the defaults and docs/OPERATIONS.md for the Caddy lines that strip the
+ * client's copies). With no header the request passes unless GEO_REQUIRED=1. The marketing pages are never blocked.
  */
 export function middleware(req: NextRequest) {
   const blocked = parseCountryList(process.env.BLOCKED_COUNTRIES ?? DEFAULT_BLOCKED_COUNTRIES)
-  const country = countryFrom((h) => req.headers.get(h))
-  if (isBlockedCountry(country, blocked)) {
+  const header = geoHeader({ GEO_HEADER: process.env.GEO_HEADER, VERCEL: process.env.VERCEL })
+  const country = countryFrom((h) => req.headers.get(h), header)
+  const required = process.env.GEO_REQUIRED === '1'
+  if (isBlockedCountry(country, blocked) || (required && country === null)) {
     const url = req.nextUrl.clone()
     url.pathname = '/restricted'
     url.search = `?from=${encodeURIComponent(req.nextUrl.pathname)}`

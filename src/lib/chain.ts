@@ -1,6 +1,6 @@
 /** Robinhood Chain (4663) definition shared by client (wagmi) and server (sampler). No client-only imports here. */
 import { robinhood as robinhoodBase } from 'viem/chains'
-import type { Address, Hash } from 'viem'
+import { isAddress, type Address, type Hash } from 'viem'
 import { RPC_URL } from './env'
 
 export const robinhood = {
@@ -11,11 +11,18 @@ export const robinhood = {
 export const CHAIN_ID = robinhood.id
 
 /** Uniswap v3 on Robinhood Chain, as published in @uniswap/sdk-core (ROBINHOOD_ADDRESSES / WETH9). Overridable for local chains. */
+/** A build-time override becomes an approval spender, so anything that is not an address fails the build. */
+function override(name: string, value: string | undefined, fallback: Address): Address {
+  if (!value) return fallback
+  if (!isAddress(value)) throw new Error(`${name} is not an address: ${value}`)
+  return value
+}
+
 export const UNISWAP = {
-  router: (process.env.NEXT_PUBLIC_UNISWAP_ROUTER || '0xcaf681a66d020601342297493863e78c959e5cb2') as Address, // SwapRouter02
-  quoter: (process.env.NEXT_PUBLIC_UNISWAP_QUOTER || '0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7') as Address, // QuoterV2
-  weth: (process.env.NEXT_PUBLIC_WETH || '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73') as Address, // WETH9
-  npm: (process.env.NEXT_PUBLIC_UNISWAP_NPM || '0x73991a25c818bf1f1128deaab1492d45638de0d3') as Address, // NonfungiblePositionManager (limit orders)
+  router: override('NEXT_PUBLIC_UNISWAP_ROUTER', process.env.NEXT_PUBLIC_UNISWAP_ROUTER, '0xcaf681a66d020601342297493863e78c959e5cb2'), // SwapRouter02
+  quoter: override('NEXT_PUBLIC_UNISWAP_QUOTER', process.env.NEXT_PUBLIC_UNISWAP_QUOTER, '0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7'), // QuoterV2
+  weth: override('NEXT_PUBLIC_WETH', process.env.NEXT_PUBLIC_WETH, '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73'), // WETH9
+  npm: override('NEXT_PUBLIC_UNISWAP_NPM', process.env.NEXT_PUBLIC_UNISWAP_NPM, '0x73991a25c818bf1f1128deaab1492d45638de0d3'), // NonfungiblePositionManager (limit orders)
 } as const
 export const RPC_HTTP = RPC_URL ?? robinhood.rpcUrls.default.http[0]
 export const EXPLORER = robinhood.blockExplorers.default.url

@@ -33,6 +33,7 @@ function results(over: Partial<Record<number, ReadResult>> = {}): ReadResult[] {
     okr([1n, 5_710_000_000n, 0n, 0n, 1n]), // latestRoundData: $57.10 with 8 decimals
     okr(8), // feed decimals
     okr(WAD), // stock uiMultiplier
+    okr(0n), // vault dm (0 until settled)
   ]
   return base.map((r, i) => over[i] ?? r)
 }
@@ -69,6 +70,23 @@ describe('parseStats', () => {
     const data = [...results().map(() => fail), ...results()]
     expect(parseStats(series, data, STATS_PER_SERIES, now).ready).toBe(true)
     expect(parseStats(series, data, 0, now).ready).toBe(false)
+  })
+  it('uses the frozen dm after settlement, whatever the accountant says afterwards', () => {
+    const st = parseStats(series, results({ 3: okr(2), 18: okr(1_010_000_000_000_000_000n) }), 0, now)
+    expect(st.accrued).toBeCloseTo(0.01, 9) // dm 1.01, not the accountant's 1.026
+    expect(parseStats(series, results({ 3: okr(1), 18: okr(1_010_000_000_000_000_000n) }), 0, now).accrued).toBeCloseTo(0.026255, 9) // not settled: live index
+  })
+  it('ignores a stale or non-positive Chainlink answer and prices from the market feed × multiplier', () => {
+    expect(parseStats(series, results({ 15: okr([1n, -1n, 0n, 0n, 1n]) }), 0, now, 50).usdPrice).toBe(50)
+    expect(parseStats(series, results({ 15: okr([1n, 5_710_000_000n, 0n, BigInt(Math.floor(now) - 2 * 86_400), 1n]) }), 0, now, 50).usdPrice).toBe(50)
+    expect(parseStats(series, results({ 15: okr([1n, 5_710_000_000n, 0n, BigInt(Math.floor(now) - 3600), 1n]) }), 0, now).usdPrice).toBeCloseTo(57.1, 6)
+    expect(parseStats(series, results({ 15: fail }), 0, now, 50).usdPrice).toBe(50)
+    expect(parseStats(series, results({ 15: fail }), 0, now).usdPrice).toBe(0)
+  })
+  it('shows no APY once the series has matured', () => {
+    const st = parseStats(series, results(), 0, series.maturity + 60)
+    expect(st.fixedApy).toBe(0)
+    expect(st.divYield).toBe(0)
   })
   it('is not ready while a pool read fails, but still returns safe defaults', () => {
     const st = parseStats(series, results({ 8: fail }), 0, now)

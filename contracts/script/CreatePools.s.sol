@@ -39,6 +39,7 @@ contract CreatePools is Script {
         (address t0, address t1) = token < quote ? (token, quote) : (quote, token);
         uint160 sqrt = PriceMath.sqrtPriceX96(token, quote, priceWad, IStockToken(token).decimals(), IStockToken(quote).decimals());
         pool = INonfungiblePositionManager(npm).createAndInitializePoolIfNecessary(t0, t1, fee, sqrt);
+        _requirePrice(pool, sqrt);
         if (seedToken > 0 && seedQuote > 0) {
             IStockToken(token).approve(npm, seedToken);
             IStockToken(quote).approve(npm, seedQuote);
@@ -53,14 +54,20 @@ contract CreatePools is Script {
                     tickUpper: (887272 / spacing) * spacing,
                     amount0Desired: a0,
                     amount1Desired: a1,
-                    amount0Min: 0,
-                    amount1Min: 0,
+                    amount0Min: (a0 * 99) / 100,
+                    amount1Min: (a1 * 99) / 100,
                     recipient: recipient,
                     deadline: block.timestamp + 3600
                 })
             );
         }
         console2.log("pool", token, pool);
+    }
+
+    /// @dev An existing pool keeps its own price: refuse to seed into a number somebody else set (front-run).
+    function _requirePrice(address pool, uint160 sqrt) internal view {
+        (uint160 actual,,,,,,) = IUniswapV3PoolMinimal(pool).slot0();
+        require(actual >= (uint256(sqrt) * 995) / 1000 && actual <= (uint256(sqrt) * 1005) / 1000, "pool already initialised at another price");
     }
 
     function _write(address poolPT, address poolYT, address quote, uint24 fee, string memory out) internal {

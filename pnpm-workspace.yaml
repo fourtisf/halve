@@ -12,3 +12,11 @@ allowBuilds:
   keccak: false
   unrs-resolver: false
   utf-8-validate: false
+
+# Patched versions of transitive packages flagged by `pnpm audit --prod`, all pulled in by wagmi's wallet
+# connectors or Next's build tooling and none reachable from this site's runtime; the pins remove the noise.
+overrides:
+  axios: '>=1.18.0'
+  ws: '>=8.21.0'
+  postcss: '>=8.5.23'
+  decode-uri-component: '>=0.5.0'

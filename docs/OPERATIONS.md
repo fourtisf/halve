@@ -1,6 +1,6 @@
 # Operations runbook
 
-Production runs on a single VPS (Hostinger, `31.97.57.242`) behind Caddy, as the pm2 process `halve`
+Production runs on a single VPS (Hostinger) behind Caddy, as the pm2 process `halve`
 on port 3000. This is everything needed to update it, watch it and put it back.
 
 ## Layout
@@ -81,7 +81,7 @@ traffic, add a cron on the VPS:
 
 `node scripts/keeper.mjs` every 10 minutes from cron (see docs/MAINNET.md) keeps every accountant in
 sync with its stock token. When the log says `held`, a change is waiting for the guardian: read it on
-`/oracle`, and after the two-day timelock resolve it with `cast send <accountant> "resolvePending(uint8)" <1 split | 2 special>`.
+`/oracle`, and after the two-day timelock the guardian resolves it with `cast send <accountant> "resolvePending(uint8)" 2 --rpc-url $RPC_URL --account guardian --password-file /root/.guardian.pass` (1 = split, 2 = special dividend).
 
 ## Backups
 
@@ -96,11 +96,27 @@ Keep a copy of `.env.local` in your password manager; it is the only file that c
 
 ## Geo-blocking
 
-The middleware redirects `/app` and `/lend` to `/restricted` when the request carries a country
-header (`cf-ipcountry`, `x-vercel-ip-country`, `x-country-code`, `x-geo-country`) listed in
-`BLOCKED_COUNTRIES` (default `US`). Caddy does not add one by itself: put Cloudflare in front of the
-VPS (it sets `cf-ipcountry`), or install the Caddy `maxmind_geolocation` module and add
-`header_up X-Country-Code {geoip.country_code}` to the `reverse_proxy` block. Without a header the
+The middleware redirects `/app` and `/lend` to `/restricted` when the ONE trusted country header names a
+country in `BLOCKED_COUNTRIES` (default `US`). The trusted header is `GEO_HEADER` when set, else
+`x-country-code` (on Vercel, `x-vercel-ip-country`). Reading several headers would let a visitor add the
+one the edge does not overwrite, so the proxy must strip every geo header a client sends before setting
+its own. Caddy with the `maxmind_geolocation` module:
+
+```
+halve.finance {
+  reverse_proxy 127.0.0.1:3000 {
+    header_up -X-Country-Code
+    header_up -X-Vercel-IP-Country
+    header_up -CF-IPCountry
+    header_up -X-Geo-Country
+    header_up X-Country-Code {geoip.country_code}
+  }
+}
+```
+
+With Cloudflare in front instead, set `GEO_HEADER=cf-ipcountry` and allow only Cloudflare's IP ranges to
+reach the origin, otherwise a direct connection carries no header. `GEO_REQUIRED=1` sends requests without
+a usable header to `/restricted` as well; use it once the header is known to be set. Without a header the
 wallet-modal attestation is the only gate.
 
 ## Incident checklist

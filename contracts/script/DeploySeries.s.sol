@@ -17,6 +17,7 @@ contract DeploySeries is Script {
         vm.startBroadcast();
         MultiplierAccountant acct =
             existing == address(0) ? new MultiplierAccountant(stock, vm.envAddress("GUARDIAN")) : MultiplierAccountant(existing);
+        if (existing != address(0)) acct.sync(); // the vault's d0 must be today's index, not last week's
         StripVault vault = new StripVault(
             stock, acct, vm.envString("TICKER"), vm.envUint("MATURITY"), vm.envUint("CAP"), vm.envAddress("TREASURY"), vm.envAddress("OWNER")
         );

@@ -262,6 +262,79 @@ contract StripVaultTest is Test {
         assertEq(v2.totalDeposits(), 0);
     }
 
+    function test_settlePullsTheLastDividendBeforeFreezing() public {
+        vm.prank(alice);
+        vault.split(100e18);
+        _dividend(1.01e18); // synced by the keeper
+        stock.setUIMultiplier(stock.uiMultiplier() * 1.02e18 / WAD); // lands just before maturity, keeper not yet run
+        vm.warp(maturity);
+        vault.settle(); // whoever calls first: the vault syncs before it freezes
+        assertEq(vault.dm(), 1.0302e18);
+        assertEq(acct.lastMultiplier(), stock.uiMultiplier());
+        assertEq(vault.principalPerPT(), WAD * WAD / 1.0302e18);
+    }
+
+    function test_settleHoldsWhenTheUnsyncedChangeNeedsTheGuardian() public {
+        vm.prank(alice);
+        vault.split(100e18);
+        stock.setUIMultiplier(1.05e18); // a 5 % special the keeper has not seen
+        vm.warp(maturity);
+        vm.expectRevert("Vault: accountant held");
+        vault.settle(); // refuses to freeze a stale index; the revert also undoes the hold it queued
+        acct.sync(); // the keeper queues the change for the guardian
+        assertFalse(acct.isSynced());
+        vm.expectRevert("Vault: accountant held");
+        vault.settle();
+        vm.warp(maturity + 2 days);
+        uint8 special = acct.KIND_SPECIAL(); // read before the prank, or the getter call consumes it
+        vm.prank(guardian);
+        acct.resolvePending(special);
+        vault.settle();
+        assertEq(vault.dm(), 1.05e18);
+    }
+
+    function test_forceSettleStillGivesTheGuardianItsWindow() public {
+        vm.prank(alice);
+        vault.split(100e18);
+        vm.warp(maturity + 30 days - 1 hours);
+        stock.setUIMultiplier(1.05e18);
+        acct.sync(); // held one hour before the force window opens
+        vm.warp(maturity + 30 days);
+        vm.expectRevert("Vault: guardian window");
+        vault.settle();
+        vm.warp(maturity + 30 days + 2 days);
+        vault.settle(); // the guardian never came: the index as it stands
+        assertEq(vault.dm(), WAD);
+    }
+
+    function test_vaultRefusesAStaleOrHeldAccountant() public {
+        stock.setUIMultiplier(1.02e18); // the token moved, nobody synced
+        vm.expectRevert("Vault: accountant stale");
+        new StripVault(IStockToken(address(stock)), acct, "JEPI", maturity, 1e24, treasury, owner);
+        acct.sync();
+        StripVault fresh = new StripVault(IStockToken(address(stock)), acct, "JEPI", maturity, 1e24, treasury, owner);
+        assertEq(fresh.d0(), 1.02e18);
+        stock.setUIMultiplier(stock.uiMultiplier() * 1.05e18 / WAD);
+        acct.sync(); // held
+        vm.expectRevert("Vault: accountant held");
+        new StripVault(IStockToken(address(stock)), acct, "JEPI", maturity, 1e24, treasury, owner);
+    }
+
+    function test_redeemRevertsInsteadOfPayingShortWhenTheVaultWasDrained() public {
+        vm.prank(alice);
+        vault.split(100e18);
+        vm.prank(address(vault));
+        stock.transfer(bob, 50e18); // an issuer seizure: the vault no longer holds what it owes
+        vm.warp(maturity);
+        vault.settle();
+        vm.prank(alice);
+        vm.expectRevert("Vault: shortfall");
+        vault.redeemPT(99.9e18);
+        vm.prank(alice);
+        vault.redeemPT(40e18); // what is still covered still pays
+        assertEq(stock.balanceOf(alice), 900e18 + 40e18);
+    }
+
     function testFuzz_splitThenMergeIsLossless(uint96 amount) public {
         vm.assume(amount >= 1e12 && amount <= 1_000e18);
         vm.startPrank(alice);

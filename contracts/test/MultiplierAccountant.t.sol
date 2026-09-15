@@ -154,6 +154,50 @@ contract MultiplierAccountantTest is Test {
         assertEq(acct.dividendIndexAt(t0 + 1000), acct.dividendIndex());
     }
 
+    function test_zeroMultiplierIsRefusedNotHeld() public {
+        vm.mockCall(address(stock), abi.encodeWithSelector(IStockToken.uiMultiplier.selector), abi.encode(uint256(0)));
+        vm.expectRevert("Accountant: zero multiplier");
+        acct.sync();
+        vm.clearMockedCalls();
+        assertTrue(acct.isSynced());
+        stock.setUIMultiplier(1.0065e18);
+        acct.sync();
+        assertEq(acct.dividendIndex(), 1.0065e18);
+    }
+
+    function test_guardianCanDismissAHeldChangeSoSyncRereads() public {
+        stock.setUIMultiplier(1.05e18);
+        acct.sync();
+        assertFalse(acct.isSynced());
+        vm.expectRevert("Accountant: guardian only");
+        acct.dismissPending();
+        vm.prank(guardian);
+        acct.dismissPending();
+        assertTrue(acct.isSynced());
+        stock.setUIMultiplier(1.0065e18); // the issuer corrected the value
+        acct.sync();
+        assertEq(acct.dividendIndex(), 1.0065e18);
+        assertEq(acct.checkpointCount(), 1);
+        vm.prank(guardian);
+        vm.expectRevert("Accountant: nothing pending");
+        acct.dismissPending();
+    }
+
+    function test_roundingJitterIsNotACorporateAction() public {
+        stock.setUIMultiplier(2e18);
+        acct.sync();
+        assertEq(acct.splitFactor(), 2e18);
+        stock.setUIMultiplier(2e18 + 1);
+        acct.sync();
+        assertTrue(acct.isSynced());
+        assertEq(acct.checkpointCount(), 1);
+        assertEq(acct.lastMultiplier(), 2e18 + 1);
+        stock.setUIMultiplier(2e18 - 1);
+        acct.sync();
+        assertTrue(acct.isSynced());
+        assertEq(acct.dividendIndex(), WAD);
+    }
+
     function test_classifyBands() public view {
         (uint8 k1, bool a1) = acct.classify(1.03e18);
         assertEq(k1, acct.KIND_DIVIDEND());

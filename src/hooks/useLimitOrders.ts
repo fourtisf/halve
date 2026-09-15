@@ -1,12 +1,12 @@
 'use client'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useAccount, usePublicClient, useReadContracts } from 'wagmi'
-import { getAbiItem, parseEventLogs, parseUnits, zeroAddress, type Abi, type Address, type ContractFunctionParameters, type PublicClient } from 'viem'
+import { encodeFunctionData, getAbiItem, parseEventLogs, parseUnits, zeroAddress, type Abi, type Address, type ContractFunctionParameters, type PublicClient } from 'viem'
 import type { Series } from '@/contracts/types'
 import { uniswapV3PoolAbi } from '@/contracts/abis'
 import { POLL_MS } from '@/contracts/constants'
-import { applySlippage, encodePath, swapRouter02Abi, FEE_TIERS } from '@/lib/buy'
+import { applySlippage, encodePath, swapDeadline, swapRouter02Abi, FEE_TIERS } from '@/lib/buy'
 import { CHAIN_ID, UNISWAP } from '@/lib/chain'
 import {
   amountsForLiquidity, encodeClose, expectedFill, fillProgress, getSqrtRatioAtTick, nonfungiblePositionManagerAbi, orderRange, orderStatus,
@@ -41,6 +41,8 @@ export type Order = {
   amountStock: number
   progress: number // 0..1 of the fill
   liquidity: bigint
+  /** What the liquidity alone returns right now, raw units (fees excluded): the floor for a close. */
+  held: { amount0: bigint; amount1: bigint }
 }
 
 type PoolInfo = PoolSide & { address: Address; token0: Address; fee: number; tick: number; sqrtPriceX96: bigint; current: number }
@@ -57,7 +59,7 @@ type Inputs = {
   limit: boolean
 }
 
-const RECORDS_KEY = 'halve:orders:v1'
+const RECORDS_KEY = `halve:orders:v1:${CHAIN_ID}:${UNISWAP.npm.toLowerCase()}` // token ids are per position manager
 type Record_ = { side: OrderSide; token: BuySide; price: number; amount: number }
 function loadRecords(): Record<string, Record_> {
   try { return JSON.parse(localStorage.getItem(RECORDS_KEY) ?? '{}') as Record<string, Record_> } catch { return {} }
@@ -67,7 +69,7 @@ function saveRecord(tokenId: bigint, r: Record_) {
 }
 
 const MOCK_POOL: PoolSide = { tokenIsToken0: true, tokenDecimals: 18, stockDecimals: 18, spacing: 60 }
-const DEADLINE = () => BigInt(Math.floor(Date.now() / 1000) + 20 * 60)
+const DEADLINE = () => BigInt(Math.floor(Date.now() / 1000) + 60 * 60) // an approval prompt may sit a while before the mint
 
 /**
  * Which token each position deposited at mint (its first IncreaseLiquidity). Tries the full range from the
@@ -108,7 +110,8 @@ export function useLimitOrders(series: Series, stats: SeriesStats, input: Inputs
   const { ethUsd } = useMarket()
   const owner = address ?? zeroAddress
   const a = cleanAmount(input.amount)
-  const price = parseFloat(input.price)
+  const price = cleanAmount(input.price)?.num ?? NaN // "1,05" must not become 1
+  const placing = useRef(false)
   const [records, setRecords] = useState<Record<string, Record_>>({})
   useEffect(() => { setRecords(loadRecords()) }, [])
 
@@ -175,7 +178,7 @@ export function useLimitOrders(series: Series, stats: SeriesStats, input: Inputs
     () => Array.from({ length: count }, (_, i) => ({ address: UNISWAP.npm, abi: nonfungiblePositionManagerAbi, functionName: 'tokenOfOwnerByIndex', args: [owner, BigInt(i)] })),
     [count, owner],
   )
-  const idsQ = useReadContracts({ contracts: idContracts, allowFailure: true, query: { enabled: !mock && count > 0 && input.active, refetchInterval: POLL_MS } })
+  const idsQ = useReadContracts({ contracts: idContracts, allowFailure: true, query: { enabled: !mock && count > 0 && input.active, refetchInterval: 60_000 } })
   const ids = useMemo(() => Array.from({ length: count }, (_, i) => ok<bigint>(idsQ.data as readonly ReadResult[] | undefined, i)).filter((x): x is bigint => x !== undefined), [idsQ.data, count])
   const posContracts = useMemo<ContractFunctionParameters[]>(
     () => ids.map((id) => ({ address: UNISWAP.npm, abi: nonfungiblePositionManagerAbi, functionName: 'positions', args: [id] })),
@@ -211,6 +214,7 @@ export function useLimitOrders(series: Series, stats: SeriesStats, input: Inputs
     queryFn: () => depositSides(client as PublicClient, unknownIds, series.deployBlock ? BigInt(series.deployBlock) : 'earliest'),
     enabled: !mock && !!client && unknownIds.length > 0 && input.active,
     staleTime: Infinity,
+    refetchInterval: false, // one log scan per set of ids, not one per poll
     retry: 1,
   })
 
@@ -228,8 +232,9 @@ export function useLimitOrders(series: Series, stats: SeriesStats, input: Inputs
       key: tokenId.toString(), tokenId, token, side, status,
       priceLow: Math.min(...edges), priceHigh: Math.max(...edges),
       amountToken: p.tokenIsToken0 ? amount0 : amount1, amountStock: p.tokenIsToken0 ? amount1 : amount0,
-      progress: side ? fillProgress(side, p.tokenIsToken0, amount0, amount1) : 0,
+      progress: side ? fillProgress(side, p.tokenIsToken0, amount0, amount1, Math.sqrt(Math.min(...edges) * Math.max(...edges))) : 0,
       liquidity,
+      held,
     }
   }), [candidates, records, sidesQ.data])
 
@@ -240,12 +245,21 @@ export function useLimitOrders(series: Series, stats: SeriesStats, input: Inputs
     return {
       key: o.id, tokenId: null, token: o.token, side: o.side, status: 'open' as const,
       priceLow: r.priceLow || o.price, priceHigh: r.priceHigh || o.price,
-      amountToken: o.side === 'sell' ? o.amount : 0, amountStock: o.side === 'buy' ? o.amount : 0, progress: 0, liquidity: 0n,
+      amountToken: o.side === 'sell' ? o.amount : 0, amountStock: o.side === 'buy' ? o.amount : 0, progress: 0, liquidity: 0n, held: { amount0: 0n, amount1: 0n },
     }
   }), [store.orders, series.ticker, stats.ptPrice, stats.ytPrice])
 
   const place = useCallback(async () => {
-    if (!a || !pool || !range?.ok) return
+    if (!a || !pool || !range?.ok || placing.current) return
+    placing.current = true
+    try {
+      await placeInner(a, pool, range)
+    } finally {
+      placing.current = false
+      tx.hold(false)
+    }
+    // the narrowed values are passed in: a closure would lose the null checks above
+    async function placeInner(a: NonNullable<ReturnType<typeof cleanAmount>>, pool: PoolInfo, range: OrderRange) {
     const sym = `${input.side === 'pt' ? 'p' : 'y'}${series.ticker}`
     const t = series.ticker
     const what = input.direction === 'buy' ? `Buy ${sym} at ≤ ${range.priceHigh.toFixed(4)} ${t}` : `Sell ${a.num} ${sym} at ≥ ${range.priceLow.toFixed(4)} ${t}`
@@ -260,11 +274,14 @@ export function useLimitOrders(series: Series, stats: SeriesStats, input: Inputs
     if (!address || !client) return
     const token = input.side === 'pt' ? series.pt : series.yt
     let deposit: bigint
+    tx.hold(true) // one flow: the button stays disabled between the swap and the mint
     if (input.direction === 'buy' && input.payWith === 'eth') {
       if (!ethQ.data) { toast('No ETH route yet'); return }
       const minOut = applySlippage(ethQ.data.amountOut)
-      const swap = await tx.run([{ address: UNISWAP.router, abi: swapRouter02Abi as Abi, functionName: 'exactInput', args: [{ path: encodePath(ethQ.data.route.tokens, ethQ.data.route.fees), recipient: address, amountIn: ethSwapIn, amountOutMinimum: minOut }], label: 'sending', value: ethSwapIn }], `Swapped ${a.num} ETH to ${t}`)
+      const call = encodeFunctionData({ abi: swapRouter02Abi, functionName: 'exactInput', args: [{ path: encodePath(ethQ.data.route.tokens, ethQ.data.route.fees), recipient: address, amountIn: ethSwapIn, amountOutMinimum: minOut }] })
+      const swap = await tx.run([{ address: UNISWAP.router, abi: swapRouter02Abi as Abi, functionName: 'multicall', args: [swapDeadline(), [call]], label: 'sending', value: ethSwapIn }], `Swapped ${a.num} ETH to ${t}`)
       if (!swap) return
+      tx.hold(true)
       deposit = minOut
     } else {
       deposit = parseUnits(a.str, series.decimals)
@@ -283,12 +300,14 @@ export function useLimitOrders(series: Series, stats: SeriesStats, input: Inputs
       [await tx.approvalStep(depositToken, UNISWAP.npm, deposit), { address: UNISWAP.npm, abi: nonfungiblePositionManagerAbi as Abi, functionName: 'mint', args: [params], label: 'sending' }],
       `Order placed: ${what}`,
     )
+    if (!rc && input.direction === 'buy' && input.payWith === 'eth') toast(`Your ETH is now ${t} in your wallet; place the order again paying with ${t}`)
     if (rc) {
       const minted = parseEventLogs({ abi: nonfungiblePositionManagerAbi, eventName: 'Transfer', logs: rc.logs }).find((l) => l.args.from === zeroAddress)
       if (minted?.args.tokenId !== undefined) {
         saveRecord(minted.args.tokenId, { side: input.direction, token: input.side, price, amount: depositAmount })
         setRecords(loadRecords())
       }
+    }
     }
   }, [a, pool, range, input, series, mock, store, price, depositAmount, toast, address, client, ethQ.data, tx, ethSwapIn])
 
@@ -304,7 +323,9 @@ export function useLimitOrders(series: Series, stats: SeriesStats, input: Inputs
       return
     }
     if (!address || o.tokenId === null) return
-    await tx.run([{ address: UNISWAP.npm, abi: nonfungiblePositionManagerAbi as Abi, functionName: 'multicall', args: [encodeClose(o.tokenId, o.liquidity, address, DEADLINE())], label: 'sending' }], what)
+    // out of range the amounts are fixed, so 99 % of what the position holds is a safe floor; inside the range they move with the price
+    const mins = o.status === 'partial' ? { amount0Min: 0n, amount1Min: 0n } : { amount0Min: (o.held.amount0 * 99n) / 100n, amount1Min: (o.held.amount1 * 99n) / 100n }
+    await tx.run([{ address: UNISWAP.npm, abi: nonfungiblePositionManagerAbi as Abi, functionName: 'multicall', args: [encodeClose(o.tokenId, o.liquidity, address, DEADLINE(), mins)], label: 'sending' }], what)
   }, [series, mock, store, toast, address, tx])
 
   return {

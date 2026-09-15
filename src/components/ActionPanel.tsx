@@ -17,6 +17,7 @@ import { useMerge } from '@/hooks/useMerge'
 import { useRedeem } from '@/hooks/useRedeem'
 import { useBuy, type PayWith } from '@/hooks/useBuy'
 import { useLimitOrders } from '@/hooks/useLimitOrders'
+import { cleanAmount } from '@/lib/amount'
 import { Banner } from './Skeleton'
 import { Orders } from './Orders'
 
@@ -34,7 +35,9 @@ type Props = {
   initialSide?: 'pt' | 'yt'
 }
 
-const trim = (n: number) => n.toFixed(4).replace(/\.?0+$/, '')
+/** 4 decimals, rounded DOWN: a Max that rounds up exceeds the balance and reverts. */
+const floor4 = (n: number) => (Math.floor(n * 1e4) / 1e4).toFixed(4).replace(/\.?0+$/, '')
+const ETH_GAS_RESERVE = 0.002
 
 /**
  * Trade / Split / Merge / Earn panel — behaviour mirrors the prototype's syncApp()/calc()/go(); Redeem appears after maturity.
@@ -68,7 +71,7 @@ export function ActionPanel({ series, stats, position, mode, onMode, initialSide
   const settled = isSettled(stats) || (matured && stats.isMock)
   useEffect(() => { if (mode === 'redeem' && !matured) onMode('buy') }, [mode, matured, onMode])
 
-  const a = parseFloat(amt) || 0
+  const a = cleanAmount(amt)?.num ?? 0 // the same parser the hooks use: "1e2" or "1,5" count as nothing, not as 100 or 1
   const n = a * (1 - SPLIT_FEE)
   const { ytPrice, usdPrice: px, fixedApy, divYield } = stats
   const apy = f(fixedApy * 100, 1)
@@ -164,7 +167,9 @@ export function ActionPanel({ series, stats, position, mode, onMode, initialSide
             : `p${t} redeems one full share each. y${t} redeems the dividends reinvested since the series started, less the 5% yield redemption fee.`
           : `Halve pares exactly what the pools need and mints both Uniswap v3 positions in one transaction. Earn swap fees plus $HALVE incentives (${apr}% APR).`
 
-  const limitHint = !limit ? null : limitPrice === '' || !range
+  const limitHint = !limit ? null : limitPrice !== '' && !cleanAmount(limitPrice)
+    ? 'Use digits and a dot for decimals, e.g. 0.95'
+    : limitPrice === '' || !range
     ? limitH.pool ? `Now ${f(limitH.pool.current, 4)} ${t} per ${buyToken}. ${dir === 'buy' ? 'Type a lower price to buy cheaper.' : 'Type a higher price to sell dearer.'}` : 'Pool price loading…'
     : range.ok
       ? `Now ${f(range.current, 4)} · fills between ${f(range.priceLow, 4)} and ${f(range.priceHigh, 4)} ${t} per ${buyToken}`
@@ -218,7 +223,7 @@ export function ActionPanel({ series, stats, position, mode, onMode, initialSide
       <div className="fld">
         <label>
           <span id="inLbl">{mode === 'split' ? 'You deposit' : mode === 'merge' ? 'You merge' : mode === 'redeem' ? 'You redeem' : selling ? 'You sell' : trade ? 'You pay' : 'You provide'}</span>
-          <span>Balance <span className="mono" id="bal">{f(wallet ? balance : 0, 2)}</span> <button type="button" onClick={() => setAmt(wallet ? trim(balance) : '0')}>Max</button></span>
+          <span>Balance <span className="mono" id="bal">{f(wallet ? balance : 0, 2)}</span> <button type="button" onClick={() => setAmt(wallet ? floor4(trade && !selling && payWith === 'eth' ? Math.max(0, balance - ETH_GAS_RESERVE) : balance) : '0')}>Max</button></span>
         </label>
         <div className="in">
           <input id="amt" value={amt} inputMode="decimal" aria-label="Amount" aria-invalid={!!invalid} onChange={(e) => setAmt(e.target.value)} />
@@ -238,7 +243,7 @@ export function ActionPanel({ series, stats, position, mode, onMode, initialSide
               <input id="limitPrice" value={limitPrice} inputMode="decimal" aria-label="Limit price" placeholder={limitH.pool ? f(limitH.pool.current, 4) : '0.0000'} aria-invalid={badLimit && limitPrice !== ''} onChange={(e) => setLimitPrice(e.target.value)} />
             </div>
           </div>
-          <div className={`hint${range && !range.ok ? ' r' : ''}`} id="limitHint">{limitHint}</div>
+          <div className={`hint${(range && !range.ok) || (limitPrice !== '' && !cleanAmount(limitPrice)) ? ' r' : ''}`} id="limitHint">{limitHint}</div>
         </>)}
       </>)}
       <div className="arrow">↓</div>
@@ -264,7 +269,7 @@ export function ActionPanel({ series, stats, position, mode, onMode, initialSide
       <div className="meta" id="meta">
         {mode === 'split' && (<>
           <div><span>Fee</span><b>{f(a * SPLIT_FEE, 4)} {t} (0.10%)</b></div>
-          <div><span>p{t} value now</span><b>${f(n * (1 - ytPrice) * px, 2)}</b></div>
+          <div><span>p{t} value now</span><b>${f(n * stats.ptPrice * px, 2)}</b></div>
           <div><span>y{t} value now</span><b>${f(n * ytPrice * px, 2)}</b></div>
           <div><span>Fixed APY if you sell YT</span><b className="g">{apy}%</b></div>
         </>)}

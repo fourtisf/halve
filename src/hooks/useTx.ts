@@ -11,7 +11,11 @@ import type { TxStatus } from '@/lib/types'
 
 export type Step = { address: Address; abi: Abi; functionName: string; args: readonly unknown[]; label: 'approving' | 'sending'; value?: bigint }
 
-/** Shared approve-then-call runner used by useSplit / useMerge / useRedeem. */
+/**
+ * Shared approve-then-call runner used by every transaction hook. `busy` covers the whole flow, from the
+ * allowance read that precedes the first prompt to the last receipt, so a second click never starts a
+ * second flow; every step is signed by the account that started it (a wallet switched mid-flow aborts).
+ */
 export function useTx() {
   const { address } = useAccount()
   const publicClient = usePublicClient({ chainId: CHAIN_ID })
@@ -19,32 +23,41 @@ export function useTx() {
   const qc = useQueryClient()
   const { toast } = useToast()
   const [status, setStatus] = useState<TxStatus>('idle')
+  const [preparing, setPreparing] = useState(false)
   const [txHash, setTxHash] = useState<Hash | null>(null)
 
-  /** approve(spender, amount) only when the current allowance is short. */
+  /** approve(spender, amount) only when the current allowance is short. Marks the flow busy from here on. */
   const approvalStep = useCallback(
     async (token: Address, spender: Address, amount: bigint): Promise<Step | null> => {
       if (!address || !publicClient) return null
-      const allowance = await publicClient.readContract({ address: token, abi: erc20Abi, functionName: 'allowance', args: [address, spender] })
-      if (allowance >= amount) return null
-      return { address: token, abi: erc20Abi as Abi, functionName: 'approve', args: [spender, amount], label: 'approving' }
+      setPreparing(true)
+      try {
+        const allowance = await publicClient.readContract({ address: token, abi: erc20Abi, functionName: 'allowance', args: [address, spender] })
+        if (allowance >= amount) return null
+        return { address: token, abi: erc20Abi as Abi, functionName: 'approve', args: [spender, amount], label: 'approving' }
+      } catch (e) {
+        setPreparing(false)
+        throw e
+      }
     },
     [address, publicClient],
   )
 
   const run = useCallback(
     async (steps: (Step | null)[], onDone: string): Promise<TransactionReceipt | null> => {
-      if (!address || !publicClient) { toast('Connect wallet'); return null }
+      if (!address || !publicClient) { setPreparing(false); toast('Connect wallet'); return null }
       setTxHash(null)
       let last: TransactionReceipt | null = null
       try {
         for (const step of steps) {
           if (!step) continue
           setStatus(step.label)
-          const hash = await writeContractAsync({ address: step.address, abi: step.abi, functionName: step.functionName, args: step.args, chainId: CHAIN_ID, value: step.value })
+          const hash = await writeContractAsync({ address: step.address, abi: step.abi, functionName: step.functionName, args: step.args, chainId: CHAIN_ID, value: step.value, account: address })
           setTxHash(hash)
           setStatus('confirming')
-          const rc = await publicClient.waitForTransactionReceipt({ hash })
+          let replaced: string | null = null
+          const rc = await publicClient.waitForTransactionReceipt({ hash, onReplaced: (r) => { replaced = r.reason } })
+          if (replaced === 'cancelled') throw new Error(`${step.functionName} was cancelled in the wallet`)
           if (rc.status !== 'success') throw new Error(`${step.functionName} reverted`)
           last = rc
         }
@@ -58,10 +71,14 @@ export function useTx() {
         return null
       } finally {
         setStatus('idle')
+        setPreparing(false)
       }
     },
     [address, publicClient, writeContractAsync, qc, toast],
   )
 
-  return { run, approvalStep, status, txHash, busy: status !== 'idle' }
+  /** Keep the flow busy across several run() calls (a swap followed by a mint). */
+  const hold = useCallback((on: boolean) => setPreparing(on), [])
+
+  return { run, approvalStep, hold, status, txHash, busy: status !== 'idle' || preparing }
 }

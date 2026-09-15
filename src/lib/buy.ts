@@ -51,7 +51,11 @@ export const swapRouter02Abi = [
   },
   { type: 'function', name: 'unwrapWETH9', stateMutability: 'payable', inputs: [{ name: 'amountMinimum', type: 'uint256' }, { name: 'recipient', type: 'address' }], outputs: [] },
   { type: 'function', name: 'multicall', stateMutability: 'payable', inputs: [{ name: 'data', type: 'bytes[]' }], outputs: [{ name: 'results', type: 'bytes[]' }] },
+  { type: 'function', name: 'multicall', stateMutability: 'payable', inputs: [{ name: 'deadline', type: 'uint256' }, { name: 'data', type: 'bytes[]' }], outputs: [{ name: 'results', type: 'bytes[]' }] },
 ] as const
+
+/** 20 minutes: a transaction that sits in a queue longer than that reverts instead of filling at a stale bound. */
+export const swapDeadline = (now = Date.now()): bigint => BigInt(Math.floor(now / 1000) + 20 * 60)
 
 export const quoterV2Abi = [
   {

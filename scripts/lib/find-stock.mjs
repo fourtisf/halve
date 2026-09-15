@@ -89,8 +89,8 @@ export function pickCandidate(candidates) {
 
 const stockAbi = parseAbi(['function symbol() view returns (string)', 'function decimals() view returns (uint8)', 'function uiMultiplier() view returns (uint256)'])
 
-/** Proves the address is an ERC-8056 stock token whose symbol matches the ticker. */
-export async function verifyStock(rpc, address, ticker) {
+/** Proves the address is an ERC-8056 stock token whose symbol matches the ticker (exactly, when `strict`). */
+export async function verifyStock(rpc, address, ticker, strict = false) {
   if (!isAddress(address)) return { ok: false, reason: 'not an address' }
   const client = createPublicClient({ transport: http(rpc) })
   const code = await client.getCode({ address }).catch(() => undefined)
@@ -99,7 +99,8 @@ export async function verifyStock(rpc, address, ticker) {
   try { symbol = await client.readContract({ address, abi: stockAbi, functionName: 'symbol' }) } catch { return { ok: false, reason: 'symbol() failed' } }
   try { decimals = await client.readContract({ address, abi: stockAbi, functionName: 'decimals' }) } catch { return { ok: false, reason: 'decimals() failed' } }
   try { multiplier = await client.readContract({ address, abi: stockAbi, functionName: 'uiMultiplier' }) } catch { return { ok: false, reason: `uiMultiplier() failed (not ERC-8056), symbol ${symbol}` } }
-  if (!symbolMatches(symbol, ticker)) return { ok: false, reason: `symbol is ${symbol}, expected ${ticker}`, symbol }
+  const match = strict ? norm(symbol) === norm(ticker) : symbolMatches(symbol, ticker)
+  if (!match) return { ok: false, reason: `symbol is ${symbol}, expected ${ticker}`, symbol }
   return { ok: true, symbol, decimals: Number(decimals), multiplier }
 }
 
@@ -137,10 +138,12 @@ export async function fetchBlockscout(ticker, url = BLOCKSCOUT_URL) {
 }
 
 /**
- * Full resolution: registry → verify; else Blockscout → verify each; returns
- * { ok, address, symbol, source, note } or { ok: false, reason, tried }.
+ * Full resolution: Robinhood's registry → verify → pin. When the registry has no entry, Blockscout's token
+ * search is consulted for suggestions only: anyone can deploy a token called SPY with a uiMultiplier(), so a
+ * search hit is never deployed against by itself (ALLOW_BLOCKSCOUT_RESOLVE=1 opts in). Returns
+ * { ok, address, symbol, source, note } or { ok: false, reason, tried, suggestions }.
  */
-export async function resolveStock(ticker, rpc, log = () => {}) {
+export async function resolveStock(ticker, rpc, log = () => {}, { allowBlockscout = process.env.ALLOW_BLOCKSCOUT_RESOLVE === '1' } = {}) {
   const tried = []
   try {
     const pages = await fetchRegistry()
@@ -164,17 +167,20 @@ export async function resolveStock(ticker, rpc, log = () => {}) {
     } else if (pick?.ambiguous) log(`registry lists several ${ticker} deployments: ${pick.ambiguous.map((c) => `${c.address} (chain ${c.chainId ?? '?'})`).join(', ')}`)
     else log(`registry has no entry for ${ticker}`)
   } catch (e) { log(`registry unavailable: ${e.message}`) }
+  const suggestions = []
   try {
     const items = await fetchBlockscout(ticker)
     if (items.length === 0) log(`Blockscout has no ERC-20 with symbol ${ticker}`)
     for (const it of items) {
-      const v = await verifyStock(rpc, it.address, ticker)
+      const v = await verifyStock(rpc, it.address, ticker, true)
       tried.push({ source: 'blockscout', address: it.address, holders: it.holders, ...v })
-      if (v.ok) return { ok: true, address: it.address, symbol: v.symbol, decimals: v.decimals, multiplier: v.multiplier, source: 'Blockscout token search', note: `${it.holders} holders; confirm it is the Robinhood-issued token on the explorer` }
-      log(`Blockscout candidate ${it.address} rejected: ${v.reason}`)
+      if (!v.ok) { log(`Blockscout candidate ${it.address} rejected: ${v.reason}`); continue }
+      if (allowBlockscout) return { ok: true, address: it.address, symbol: v.symbol, decimals: v.decimals, multiplier: v.multiplier, source: 'Blockscout token search (ALLOW_BLOCKSCOUT_RESOLVE=1)', note: `${it.holders} holders` }
+      suggestions.push({ address: it.address, symbol: v.symbol, holders: it.holders, name: it.name })
     }
   } catch (e) { log(`Blockscout unavailable: ${e.message}`) }
-  return { ok: false, reason: `no verified ${ticker} stock token found`, tried }
+  if (suggestions.length) log(`Blockscout suggests: ${suggestions.map((s) => `${s.address} (${s.name ?? s.symbol}, ${s.holders} holders)`).join('; ')} — check the explorer that it is Robinhood's token, then set STOCK=0x… yourself`)
+  return { ok: false, reason: suggestions.length ? `${ticker} is not in Robinhood's registry; a search hit is not pinned on its own` : `no verified ${ticker} stock token found`, tried, suggestions }
 }
 
 /** Replaces or appends KEY=value in an env file. */

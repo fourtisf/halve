@@ -1,26 +1,31 @@
 #!/usr/bin/env node
 /**
- * Keeper: calls accountant.sync() for every live series whose stock token multiplier moved.
- * Late is fine (the vault pauses splits meanwhile), wrong is impossible (sync is rule-based). Run from cron:
- *   (every 10 minutes)  cd ~/halve/halve && node scripts/keeper.mjs >> /var/log/halve/keeper.log 2>&1
- * Signing comes from .env.mainnet (WALLET_ARGS or DEPLOYER_KEY); any funded wallet can be the keeper.
+ * Keeper: calls accountant.sync() for every live series whose stock token multiplier moved. Wrong is impossible
+ * (sync is rule-based); late costs precision, not safety: a dividend the keeper has not synced when a series
+ * matures is still pulled in by settle() itself, and a held change only pauses splits. Run from cron every
+ * 10 minutes with an explicit PATH (cron's own PATH has neither node nor cast) and a lock; the exact crontab
+ * lines are in docs/MAINNET.md under "Keeper".
+ * Signing comes from .env.mainnet or MAINNET_ENV (WALLET_ARGS); any funded wallet can be the keeper, and a
+ * separate low-value one is the right choice for a cron job on the serving host.
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { loadEnv, refusePlaintextKey, walletArgsFrom } from './lib/env.mjs'
 
 const root = resolve(new URL('..', import.meta.url).pathname)
-const env = { ...process.env }
-const envFile = resolve(root, process.env.MAINNET_ENV ?? '.env.mainnet')
-if (existsSync(envFile)) for (const line of readFileSync(envFile, 'utf8').split('\n')) {
-  const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/.exec(line)
-  if (m && !(m[1] in process.env)) env[m[1]] = m[2].replace(/^["']|["']$/g, '')
-}
+const env = loadEnv(resolve(root, process.env.MAINNET_ENV ?? '.env.mainnet'))
 const RPC = env.RPC_URL ?? 'https://rpc.mainnet.chain.robinhood.com'
-const walletArgs = env.DEPLOYER_KEY ? ['--private-key', env.DEPLOYER_KEY] : env.WALLET_ARGS ? env.WALLET_ARGS.split(/\s+/) : null
+const walletArgs = walletArgsFrom(env)
+refusePlaintextKey(env, RPC)
 const bin = (n) => (env.FOUNDRY_BIN ? resolve(env.FOUNDRY_BIN, n) : n)
 const seriesFile = env.SERIES_FILE ?? resolve(root, 'src/contracts/series.json')
-const cast = (args) => { const r = spawnSync(bin('cast'), args, { encoding: 'utf8' }); if (r.status !== 0) throw new Error((r.stderr || r.stdout).trim().split('\n').slice(-2).join(' | ')); return r.stdout.trim() }
+const cast = (args) => {
+  const r = spawnSync(bin('cast'), args, { encoding: 'utf8', timeout: 60_000 })
+  if (r.error) throw new Error(r.error.code === 'ENOENT' ? `cast not found (PATH=${process.env.PATH}); set FOUNDRY_BIN or PATH in the crontab` : r.error.message)
+  if (r.status !== 0) throw new Error((r.stderr || r.stdout).trim().split('\n').slice(-2).join(' | '))
+  return r.stdout.trim()
+}
 const call = (to, sig) => cast(['call', to, sig, '--rpc-url', RPC]).split(' ')[0]
 
 const live = JSON.parse(readFileSync(seriesFile, 'utf8')).filter((s) => !/^0x0+$/.test(s.accountant))
@@ -34,7 +39,7 @@ for (const s of live) {
     const current = BigInt(call(s.underlying, 'uiMultiplier()(uint256)'))
     const last = BigInt(call(s.accountant, 'lastMultiplier()(uint256)'))
     const synced = call(s.accountant, 'isSynced()(bool)') === 'true'
-    if (!synced) { console.log(`${stamp} ${s.ticker}: held (pending guardian); multiplier ${current}`); continue }
+    if (!synced) { console.log(`${stamp} ${s.ticker}: HELD — a change is waiting for the guardian (resolvePending after the 2-day timelock); multiplier ${current}`); failures++; continue }
     if (current === last) { console.log(`${stamp} ${s.ticker}: in sync (${current})`); continue }
     if (!walletArgs) { console.log(`${stamp} ${s.ticker}: multiplier moved ${last} → ${current} but no signer configured`); failures++; continue }
     const r = JSON.parse(cast(['send', s.accountant, 'sync()', '--rpc-url', RPC, ...walletArgs, '--json']))

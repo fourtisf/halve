@@ -140,6 +140,8 @@ describe('position amounts', () => {
     expect(fillProgress('buy', true, 5, 5)).toBe(0.5)
     expect(fillProgress('sell', false, 3, 1)).toBe(0.75) // token is token1: 3 stock out of 3 + 1 token
     expect(fillProgress('sell', true, 0, 0)).toBe(0)
+    // a YT order at 0.05: 1000 yT + 50 stock inside the tick is half done by value, not 95 %
+    expect(fillProgress('buy', true, 1000, 50, 0.05)).toBeCloseTo(0.5, 9)
   })
 })
 
@@ -152,6 +154,8 @@ describe('encodeClose', () => {
     expect(decodeFunctionData({ abi: nonfungiblePositionManagerAbi, data: calls[1] })).toMatchObject({ functionName: 'collect', args: [{ tokenId: 7n, recipient: owner }] })
     expect(decodeFunctionData({ abi: nonfungiblePositionManagerAbi, data: calls[2] })).toMatchObject({ functionName: 'burn', args: [7n] })
     expect(encodeClose(7n, 0n, owner, 999n)).toHaveLength(2)
+    const withMins = encodeClose(7n, 123n, owner, 999n, { amount0Min: 10n, amount1Min: 0n })
+    expect(decodeFunctionData({ abi: nonfungiblePositionManagerAbi, data: withMins[0] })).toMatchObject({ functionName: 'decreaseLiquidity', args: [{ amount0Min: 10n, amount1Min: 0n }] })
     expect(ADDRESS_THIS).toBe('0x0000000000000000000000000000000000000002')
   })
 })

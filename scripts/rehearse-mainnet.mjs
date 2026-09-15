@@ -48,8 +48,8 @@ try {
   }
   const envFile = resolve(dir, 'env.rehearsal')
   writeFileSync(envFile, [
-    signing, `RPC_URL=${RPC}`, 'CHAIN_ID=4663', 'VERIFY=0',
-    `STOCK=${mock.underlying}`, 'TICKER=SCHD', 'SERIES_ID=SCHD-MAR27', `MATURITY=${Math.floor(Date.now() / 1000) + 180 * 86400}`,
+    signing, `RPC_URL=${RPC}`, 'CHAIN_ID=4663   # inline comments are allowed, like the example file', 'VERIFY=0',
+    `STOCK=${mock.underlying}`, 'TICKER=SCHD', 'SERIES_ID=SCHD-MAR27', `MATURITY=${Math.floor(Date.now() / 1000) + 180 * 86400}   # unix timestamp`,
     'CAP=1000000000000000000000000', `TREASURY=0x70997970C51812dc3A010C7d01b50e0d17dc79C8`, `GUARDIAN=0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC`, `OWNER=0x90F79bf6EB2c4f870365E785982E1f101E93b906`,
     `PRICE_FEED=${mock.priceFeed}`, `NPM=${uni.npm}`, 'FEE=3000', 'SEED_AMOUNT=10000000000000000000000',
   ].join('\n'))
@@ -64,7 +64,13 @@ try {
   sh(process.execPath, [resolve(root, 'scripts/keeper.mjs')], { env: { ...process.env, MAINNET_ENV: envFile } })
   const count = spawnSync(bin('cast'), ['call', after.accountant, 'checkpointCount()(uint256)', '--rpc-url', RPC], { encoding: 'utf8' }).stdout.trim()
   if (!count.startsWith('1')) throw new Error(`keeper did not sync: checkpointCount ${count}`)
-  sh(process.execPath, [resolve(root, 'scripts/smoke-mainnet.mjs')], { env: { ...process.env, MAINNET_ENV: envFile, ROUTER: uni.router } })
+  sh(process.execPath, [resolve(root, 'scripts/smoke-mainnet.mjs')], { env: { ...process.env, MAINNET_ENV: envFile, ROUTER: uni.router, QUOTER: uni.quoter } })
+  // the resume path: pools missing from series.json while the vault is recorded → only the pools step runs
+  const ZERO = '0x0000000000000000000000000000000000000000'
+  writeFileSync(seriesPath, JSON.stringify(JSON.parse(readFileSync(seriesPath, 'utf8')).map((s) => (s.id === 'SCHD-MAR27' ? { ...s, poolPT: ZERO, poolYT: ZERO } : s)), null, 2) + '\n')
+  sh(process.execPath, [resolve(root, 'scripts/mainnet.mjs'), '--resume-pools'], { env: { ...process.env, MAINNET_ENV: envFile } })
+  const resumed = JSON.parse(readFileSync(seriesPath, 'utf8')).find((s) => s.id === 'SCHD-MAR27')
+  if (/^0x0+$/.test(resumed.poolPT) || resumed.vault !== after.vault) throw new Error('--resume-pools did not fill the pools in series.json')
   console.log(`\nrehearsal ok: SCHD-MAR27 → vault ${after.vault}, pools ${after.poolPT} / ${after.poolYT}; keeper synced 1 checkpoint; smoke test passed`)
   code = 0
 } catch (e) {

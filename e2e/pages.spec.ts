@@ -67,14 +67,16 @@ test('legal pages exist and are linked from the footer and the wallet modal', as
 })
 
 test('geo-block: a US country header redirects /app and /lend to /restricted, other countries and no header pass', async ({ request, page }) => {
-  const us = await request.get('/app', { headers: { 'cf-ipcountry': 'US' }, maxRedirects: 0 })
+  const us = await request.get('/app', { headers: { 'x-country-code': 'US' }, maxRedirects: 0 }) // the proxy's header (default GEO_HEADER)
   expect(us.status()).toBe(307)
   expect(us.headers()['location']).toContain('/restricted?from=%2Fapp')
-  expect((await request.get('/lend', { headers: { 'x-vercel-ip-country': 'us' }, maxRedirects: 0 })).status()).toBe(307)
-  expect((await request.get('/app', { headers: { 'cf-ipcountry': 'DE' }, maxRedirects: 0 })).status()).toBe(200)
+  expect((await request.get('/lend', { headers: { 'x-country-code': 'us' }, maxRedirects: 0 })).status()).toBe(307)
+  expect((await request.get('/app', { headers: { 'x-country-code': 'DE' }, maxRedirects: 0 })).status()).toBe(200)
+  // only the trusted header counts: platform headers a client adds itself are ignored
+  expect((await request.get('/app', { headers: { 'cf-ipcountry': 'US', 'x-vercel-ip-country': 'US', 'x-geo-country': 'US' }, maxRedirects: 0 })).status()).toBe(200)
   expect((await request.get('/app', { maxRedirects: 0 })).status()).toBe(200)
-  expect((await request.get('/', { headers: { 'cf-ipcountry': 'US' }, maxRedirects: 0 })).status()).toBe(200) // marketing pages stay open
-  expect((await request.get('/oracle', { headers: { 'cf-ipcountry': 'US' }, maxRedirects: 0 })).status()).toBe(200)
+  expect((await request.get('/', { headers: { 'x-country-code': 'US' }, maxRedirects: 0 })).status()).toBe(200) // marketing pages stay open
+  expect((await request.get('/oracle', { headers: { 'x-country-code': 'US' }, maxRedirects: 0 })).status()).toBe(200)
   await page.goto('/restricted')
   await expect(page.locator('h2')).toContainText("isn't available in your region")
 })

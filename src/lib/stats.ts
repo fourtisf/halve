@@ -12,7 +12,7 @@ export function ok<T>(data: readonly ReadResult[] | undefined, i: number): T | u
   return r && r.status === 'success' ? (r.result as T) : undefined
 }
 
-export const STATS_PER_SERIES = 18
+export const STATS_PER_SERIES = 19
 
 export function statsContracts(s: Series): ContractFunctionParameters[] {
   return [
@@ -34,6 +34,7 @@ export function statsContracts(s: Series): ContractFunctionParameters[] {
     { address: s.priceFeed, abi: chainlinkAggregatorAbi, functionName: 'latestRoundData' },
     { address: s.priceFeed, abi: chainlinkAggregatorAbi, functionName: 'decimals' },
     { address: s.underlying, abi: stockTokenAbi, functionName: 'uiMultiplier' },
+    { address: s.vault, abi: stripVaultAbi, functionName: 'dm' },
   ]
 }
 
@@ -67,15 +68,21 @@ export function parseStats(s: Series, data: readonly ReadResult[] | undefined, b
   const round = ok<Round>(data, base + 15)
   const feedDec = Number(ok<number>(data, base + 16) ?? 8)
   const uiMultiplier = ok<bigint>(data, base + 17)
-  const accrued = dividendIndex !== undefined && d0 !== undefined ? accruedFrom(dividendIndex, d0) : 0
+  const dm = ok<bigint>(data, base + 18)
+  // after settlement the vault pays on the frozen dm, whatever the accountant does afterwards
+  const frozen = state >= VAULT_STATE.Settled && dm !== undefined && dm > 0n ? dm : dividendIndex
+  const accrued = frozen !== undefined && d0 !== undefined ? accruedFrom(frozen, d0) : 0
 
   // pool prices are raw stock tokens per PT / YT; raw balances never rebase (ERC-8056), only the display multiplier
   const ptPrice = slotPT && token0PT ? poolPrice(slotPT[0], token0PT.toLowerCase() === s.pt.toLowerCase(), ptDec, stockDec) : 0
   const ytPrice = slotYT && token0YT ? poolPrice(slotYT[0], token0YT.toLowerCase() === s.yt.toLowerCase(), ytDec, stockDec) : 0
   const years = yearsToMaturity(s.maturity, now)
+  const matured = now >= s.maturity
   const uiMult = uiMultiplier !== undefined ? wadToNumber(uiMultiplier) : 1
-  // Chainlink prices the token with the multiplier inside — do NOT multiply by uiMultiplier again.
-  const usdPrice = round ? Number(round[1]) / 10 ** feedDec : fallbackUsd != null && fallbackUsd > 0 ? fallbackUsd * uiMult : 0
+  // Chainlink prices the token with the multiplier inside — do NOT multiply by uiMultiplier again. A non-positive
+  // or day-old answer is treated as missing, so the market feed (share price × multiplier) takes over.
+  const feedOk = !!round && round[1] > 0n && (round[3] === 0n || Number(round[3]) >= now - 86_400)
+  const usdPrice = feedOk ? Number(round[1]) / 10 ** feedDec : fallbackUsd != null && fallbackUsd > 0 ? fallbackUsd * uiMult : 0
   const tvlUsd = toNumber(totalDeposits, stockDec) * usdPrice
 
   return {
@@ -83,9 +90,9 @@ export function parseStats(s: Series, data: readonly ReadResult[] | undefined, b
     ready: !!(slotPT && slotYT),
     ptPrice,
     ytPrice,
-    fixedApy: fixedApy(ptPrice, years, accrued),
+    fixedApy: matured ? 0 : fixedApy(ptPrice, years, accrued), // one day of "time left" would annualise to nonsense
     leverage: leverage(ytPrice),
-    divYield: impliedDividendYield(ytPrice, years),
+    divYield: matured ? 0 : impliedDividendYield(ytPrice, years),
     yearsToMaturity: years,
     totalDeposits,
     cap,

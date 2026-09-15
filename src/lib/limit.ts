@@ -148,9 +148,9 @@ export function expectedFill(side: OrderSide, amount: number, priceLow: number, 
   return side === 'buy' ? amount / mean : amount * mean
 }
 
-/** How far the fill has progressed, from what the position holds now. */
-export function fillProgress(side: OrderSide, tokenIsToken0: boolean, amount0: number, amount1: number): number {
-  const token = tokenIsToken0 ? amount0 : amount1
+/** How far the fill has progressed, from what the position holds now, weighted by the range's mean price. */
+export function fillProgress(side: OrderSide, tokenIsToken0: boolean, amount0: number, amount1: number, meanPrice = 1): number {
+  const token = (tokenIsToken0 ? amount0 : amount1) * meanPrice // in stock units
   const stock = tokenIsToken0 ? amount1 : amount0
   const have = side === 'buy' ? token : stock // what a fill produces
   const rest = side === 'buy' ? stock : token // what is still waiting
@@ -210,10 +210,13 @@ export const nonfungiblePositionManagerAbi = [
   },
 ] as const
 
-/** One NPM multicall that empties and burns a position: whatever it holds (deposit, proceeds or a mix) goes to `owner`. */
-export function encodeClose(tokenId: bigint, liquidity: bigint, owner: Address, deadline: bigint): Hex[] {
+/**
+ * One NPM multicall that empties and burns a position: whatever it holds (deposit, proceeds or a mix) goes to `owner`.
+ * `mins` are the least the liquidity removal may return (a sandwich inside the tick would otherwise shave it).
+ */
+export function encodeClose(tokenId: bigint, liquidity: bigint, owner: Address, deadline: bigint, mins: { amount0Min: bigint; amount1Min: bigint } = { amount0Min: 0n, amount1Min: 0n }): Hex[] {
   const calls: Hex[] = []
-  if (liquidity > 0n) calls.push(encodeFunctionData({ abi: nonfungiblePositionManagerAbi, functionName: 'decreaseLiquidity', args: [{ tokenId, liquidity, amount0Min: 0n, amount1Min: 0n, deadline }] }))
+  if (liquidity > 0n) calls.push(encodeFunctionData({ abi: nonfungiblePositionManagerAbi, functionName: 'decreaseLiquidity', args: [{ tokenId, liquidity, amount0Min: mins.amount0Min, amount1Min: mins.amount1Min, deadline }] }))
   calls.push(encodeFunctionData({ abi: nonfungiblePositionManagerAbi, functionName: 'collect', args: [{ tokenId, recipient: owner, amount0Max: maxUint128, amount1Max: maxUint128 }] }))
   calls.push(encodeFunctionData({ abi: nonfungiblePositionManagerAbi, functionName: 'burn', args: [tokenId] }))
   return calls

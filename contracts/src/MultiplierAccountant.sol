@@ -16,6 +16,7 @@ contract MultiplierAccountant {
     uint256 public constant SPLIT_MIN_DISTANCE = 2e17; // 20 %
     uint256 public constant SPLIT_TOLERANCE = 1e12; // 1e-6 of a unit, absorbs issuer rounding
     uint256 public constant TIMELOCK = 2 days;
+    uint256 public constant JITTER = 1e9; // 1e-9: issuer rounding noise is not a corporate action
 
     uint8 public constant KIND_DIVIDEND = 0;
     uint8 public constant KIND_SPLIT = 1;
@@ -47,6 +48,8 @@ contract MultiplierAccountant {
     event Held(uint256 oldMultiplier, uint256 newMultiplier, uint256 executableAt);
     event Resolved(uint8 indexed kind, uint256 ratio);
     event GuardianChanged(address indexed guardian);
+    event Dismissed(uint256 oldMultiplier, uint256 newMultiplier);
+    event Jitter(uint256 oldMultiplier, uint256 newMultiplier);
 
     modifier onlyGuardian() {
         require(msg.sender == guardian, "Accountant: guardian only");
@@ -109,8 +112,15 @@ contract MultiplierAccountant {
     function sync() external {
         require(!_pending.exists, "Accountant: held");
         uint256 m = stock.uiMultiplier();
+        require(m > 0, "Accountant: zero multiplier"); // a broken read must never become a held or applied change
         if (m == lastMultiplier) return;
         uint256 ratio = (m * WAD) / lastMultiplier;
+        uint256 distance = ratio > WAD ? ratio - WAD : WAD - ratio;
+        if (distance <= JITTER) {
+            emit Jitter(lastMultiplier, m);
+            lastMultiplier = m;
+            return;
+        }
         (uint8 kind, bool auto_) = classify(ratio);
         if (!auto_) {
             _pending = Pending({exists: true, ts: uint64(block.timestamp), oldMultiplier: lastMultiplier, newMultiplier: m});
@@ -126,10 +136,20 @@ contract MultiplierAccountant {
         require(p.exists, "Accountant: nothing pending");
         require(block.timestamp >= p.ts + TIMELOCK, "Accountant: timelock");
         require(kind == KIND_SPECIAL || kind == KIND_SPLIT, "Accountant: bad kind");
+        require(p.newMultiplier > 0, "Accountant: zero multiplier");
         uint256 ratio = (p.newMultiplier * WAD) / p.oldMultiplier;
         delete _pending;
         _apply(kind, ratio, p.newMultiplier);
         emit Resolved(kind, ratio);
+    }
+
+    /// @notice Guardian drops a held change without applying it, so the next `sync()` re-reads the token: the way
+    /// out when the issuer corrects a wrong multiplier. If the token still shows the same value, it is held again.
+    function dismissPending() external onlyGuardian {
+        Pending memory p = _pending;
+        require(p.exists, "Accountant: nothing pending");
+        delete _pending;
+        emit Dismissed(p.oldMultiplier, p.newMultiplier);
     }
 
     function setGuardian(address g) external onlyGuardian {

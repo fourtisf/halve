@@ -87,7 +87,7 @@ events read from every live vault, filtered by the indexed `account`) with a PnL
 
 | Contract | Role |
 |---|---|
-| `StripVault` | One per series, in raw token units (ERC-8056: raw balances never rebase, only the display multiplier moves). `split(amount)` takes 0.10 % and mints `base = net` PT + YT; `merge(base)` burns both and pays `base` raw in every state, never gated; `settle()` after maturity once the accountant is synced; `redeemPT` pays `base × d0 / dm` (the original share count), `redeemYT` the rest less the 5 % yield fee; `skim()` sends donations / dust to the treasury. Owner can only change cap, treasury and itself. |
+| `StripVault` | One per series, in raw token units (ERC-8056: raw balances never rebase, only the display multiplier moves). `split(amount)` takes 0.10 % and mints `base = net` PT + YT; `merge(base)` burns both and pays `base` raw in every state, never gated; `settle()` after maturity, which first pulls the token's latest multiplier into the index and then freezes it; `redeemPT` pays `base × d0 / dm` (the original share count), `redeemYT` the rest less the 5 % yield fee; `skim()` sends donations / dust to the treasury. Owner can only change cap, treasury and itself. |
 | `MultiplierAccountant` | One per stock token. `sync()` (permissionless, idempotent) classifies each `uiMultiplier` change: 0 < r ≤ 3 % dividend, clean p/q ratio ≥ 20 % from 1 split, else held for the guardian behind a 2-day timelock (`resolvePending(kind)` accepts split or special only). Exposes `isSynced`, `dividendIndex`, `splitFactor`, `dividendIndexAt(ts)`, `pending()`, `checkpointCount()`, `checkpointAt(i)`. |
 | `VaultToken` | PT / YT ERC-20, mint/burn by the vault only. |
 | `HalveToken` | $HALVE: fixed 1 B supply to the treasury, `burn()` with a running `burned` counter. |
@@ -116,7 +116,7 @@ cd contracts && OUT=series.local.json FUND=<your address> \
 # then: SERIES_FILE=contracts/series.local.json MOCK=false NEXT_PUBLIC_RPC_URL=http://127.0.0.1:8545 pnpm build
 
 # 2. testnet / mainnet: a real ERC-8056 stock token, one series
-STOCK=0x… TICKER=JEPI MATURITY=1806451200 CAP=1000000000000000000000000 TREASURY=0x… GUARDIAN=0x… OWNER=0x… \
+STOCK=0x… TICKER=SPY MATURITY=1806451200 CAP=1000000000000000000000000 TREASURY=0x… GUARDIAN=0x… OWNER=0x… \
   forge script script/DeploySeries.s.sol --rpc-url $RPC --broadcast --private-key $KEY --verify
 # ACCOUNTANT=0x… reuses an existing accountant for the same stock token.
 # Create the PT/stock and YT/stock Uniswap v3 pools, seed them, and paste every address into src/contracts/series.json.

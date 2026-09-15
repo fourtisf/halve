@@ -6,6 +6,7 @@
  * One series per key/file; samples are { t, yt, tvl } sorted by t.
  */
 import { Redis } from '@upstash/redis'
+import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { CHART_DAYS } from '@/contracts/constants'
@@ -32,21 +33,36 @@ const valid = (s: Sample | undefined): s is Sample => !!s && typeof s.t === 'num
 const dir = () => process.env.HISTORY_DIR || path.join(process.cwd(), 'data', 'history')
 const fileFor = (id: string) => path.join(dir(), `${id.replace(/[^A-Za-z0-9_-]/g, '_')}.json`)
 
-async function fileRead(id: string): Promise<Sample[]> {
+/** A missing file is an empty history; a corrupt one is an error for writers (so it is never overwritten) and empty for readers. */
+async function fileRead(id: string, strict = false): Promise<Sample[]> {
+  let text: string
   try {
-    const raw = JSON.parse(await readFile(fileFor(id), 'utf8')) as Sample[]
+    text = await readFile(fileFor(id), 'utf8')
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return []
+    if (strict) throw e
+    return []
+  }
+  try {
+    const raw = JSON.parse(text) as Sample[]
     return raw.filter(valid).sort((a, b) => a.t - b.t)
-  } catch {
+  } catch (e) {
+    if (strict) throw new Error(`history file for ${id} is not valid JSON: ${(e as Error).message}`)
     return []
   }
 }
 
+/** Write to a private temp name, then rename: concurrent writers cannot see each other's half-written file. */
 async function fileWrite(id: string, samples: Sample[]): Promise<void> {
   await mkdir(dir(), { recursive: true })
   const f = fileFor(id)
-  await writeFile(`${f}.tmp`, JSON.stringify(samples))
-  await rename(`${f}.tmp`, f)
+  const tmp = `${f}.${process.pid}.${randomUUID()}.tmp`
+  await writeFile(tmp, JSON.stringify(samples))
+  await rename(tmp, f)
 }
+
+/** One append at a time per series: the read-modify-write below is not atomic on its own. */
+const appending = new Map<string, Promise<void>>()
 
 // ---- public API (backend-agnostic) ----
 export async function readHistory(id: string, now = Math.floor(Date.now() / 1000)): Promise<Sample[]> {
@@ -60,10 +76,14 @@ export async function readHistory(id: string, now = Math.floor(Date.now() / 1000
 export async function appendSample(id: string, s: Sample): Promise<void> {
   const r = getRedis()
   if (!r) {
-    const all = (await fileRead(id)).filter((x) => x.t >= s.t - RETENTION_S && x.t !== s.t)
-    all.push(s)
-    all.sort((a, b) => a.t - b.t)
-    return fileWrite(id, all)
+    const run = (appending.get(id) ?? Promise.resolve()).then(async () => {
+      const all = (await fileRead(id, true)).filter((x) => x.t >= s.t - RETENTION_S && x.t !== s.t)
+      all.push(s)
+      all.sort((a, b) => a.t - b.t)
+      await fileWrite(id, all)
+    })
+    appending.set(id, run.catch(() => undefined))
+    return run
   }
   const key = historyKey(id)
   await r.zadd(key, { score: s.t, member: JSON.stringify(s) })

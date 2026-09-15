@@ -79,6 +79,9 @@ contract StripVault {
         address _owner
     ) {
         require(address(_accountant.stock()) == address(_stock), "Vault: accountant mismatch");
+        // d0 is copied from the accountant: it must reflect the token as it is today, not a change still waiting
+        require(_accountant.isSynced(), "Vault: accountant held");
+        require(_accountant.lastMultiplier() == _stock.uiMultiplier(), "Vault: accountant stale");
         require(_maturity > block.timestamp, "Vault: maturity in the past");
         require(_treasury != address(0) && _owner != address(0), "Vault: zero");
         stock = _stock;
@@ -150,11 +153,26 @@ contract StripVault {
         emit Merge(msg.sender, base, amount);
     }
 
-    /// @notice Anyone may settle once matured and the accountant has nothing held, or FORCE_SETTLE_DELAY later regardless.
-    function settle() external {
+    /// @notice Anyone may settle once matured. The token's latest multiplier is pulled into the index first, so
+    /// the last dividend before maturity goes to YT holders whoever calls first (a stale index would hand it to
+    /// PT). A change that needs the guardian blocks settlement until it is resolved, or until FORCE_SETTLE_DELAY
+    /// has passed and the guardian's own window on it has run out.
+    function settle() external nonReentrant {
         require(!settled, "Vault: settled");
         require(block.timestamp >= maturity, "Vault: not matured");
-        require(accountant.isSynced() || block.timestamp >= maturity + FORCE_SETTLE_DELAY, "Vault: accountant held");
+        bool forced = block.timestamp >= maturity + FORCE_SETTLE_DELAY;
+        if (accountant.isSynced()) {
+            if (forced) {
+                try accountant.sync() {} catch {} // a token that cannot even be read must not lock funds forever
+            } else {
+                accountant.sync();
+            }
+        }
+        if (!accountant.isSynced()) {
+            require(forced, "Vault: accountant held");
+            (, uint64 heldAt,,) = accountant.pending();
+            require(block.timestamp >= heldAt + accountant.TIMELOCK(), "Vault: guardian window");
+        }
         dm = accountant.dividendIndex();
         settled = true;
         emit Settled(dm);
@@ -205,10 +223,12 @@ contract StripVault {
         emit OwnerChanged(o);
     }
 
-    /// @dev Pays `amount`, clamped to the vault balance: the vault holds exactly the raw tokens deposited, so
-    /// the clamp can only bite on rounding dust.
+    /// @dev Pays `amount`, clamped to the vault balance. The vault holds exactly the raw tokens deposited, so the
+    /// clamp can only bite on rounding dust; anything larger means the issuer moved the vault's tokens, and then
+    /// burning a holder's PT / YT for less than owed is the wrong outcome, so it reverts instead.
     function _pay(address to, uint256 amount) internal returns (uint256 paid) {
         uint256 bal = stock.balanceOf(address(this));
+        require(amount <= bal + 2, "Vault: shortfall");
         paid = amount > bal ? bal : amount;
         if (paid > 0) require(stock.transfer(to, paid), "Vault: transfer");
     }
