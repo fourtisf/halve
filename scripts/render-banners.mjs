@@ -74,6 +74,7 @@ p{color:var(--fg2);line-height:1.55}
 .hair{position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.16) 30%,rgba(255,255,255,.16) 70%,transparent)}
 .vhair{position:absolute;top:0;bottom:0;width:1px;background:linear-gradient(180deg,transparent,rgba(255,255,255,.12),transparent)}
 .glass{position:relative;border:1px solid transparent;border-radius:18px;background:linear-gradient(#0B0B0B,#0B0B0B) padding-box,linear-gradient(135deg,rgba(232,193,112,.6),rgba(255,255,255,.10) 40%,rgba(255,255,255,.05)) border-box;box-shadow:0 40px 90px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.05)}
+.glass.gold{background:linear-gradient(#0B0B0B,#0B0B0B) padding-box,linear-gradient(135deg,rgba(232,193,112,.95),rgba(232,193,112,.3) 45%,rgba(232,193,112,.12)) border-box;box-shadow:0 40px 90px rgba(0,0,0,.65),0 0 70px rgba(232,193,112,.13)}
 .kicker{font-family:'Geist Mono',ui-monospace,monospace;font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--yt)}
 .row{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-top:1px solid rgba(255,255,255,.07)}
 .row small{font-family:'Geist Mono',ui-monospace,monospace;font-size:12px;color:var(--fg3);letter-spacing:.02em}
@@ -146,51 +147,74 @@ const web = `${BASE}
 /**
  * Threads / Instagram posts. Threads has no cover image: the profile picture is the avatar in
  * public/brand, and posts carry the visuals. 4:5 (1080×1350) gets the most feed space; 1:1 for reuse.
+ * Same premium layers as the X headers: dot grid, light sweep, grain, glass panels, a faint watermark.
  */
-const card = (w, h, kicker, body) => `${BASE}
-<div class="frame" style="width:${w}px;height:${h}px;display:flex;flex-direction:column;padding:72px 80px 64px">
-  <div class="glow" style="left:-200px;top:-320px;width:1200px;height:960px;background:radial-gradient(closest-side,rgba(232,193,112,.11),transparent)"></div>
-  <div style="display:flex;justify-content:space-between;align-items:center;position:relative">
-    <div class="lockup" style="position:static;font-size:26px">${MARK(32)}Halve</div>
-    <div class="mono" style="font-size:15px;color:var(--fg3)">${kicker}</div>
+const card = (w, h, kicker, body, s = 1) => `${BASE}
+<div class="frame" style="width:${w}px;height:${h}px;display:flex;flex-direction:column;padding:${68 * s}px ${80 * s}px ${56 * s}px">
+  <div class="glow" style="left:-260px;top:-360px;width:1100px;height:1000px;background:radial-gradient(closest-side,rgba(232,193,112,.13),transparent 70%)"></div>
+  <div class="glow" style="right:-300px;bottom:-380px;width:900px;height:900px;background:radial-gradient(closest-side,rgba(232,193,112,.09),transparent 70%)"></div>
+  <div class="dots" style="--mx:50%;--my:38%"></div>
+  <div class="sweep"></div>
+  <div style="position:absolute;right:${80 * s}px;bottom:${118 * s}px;opacity:.07">${MARK(200 * s)}</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;position:relative;padding-bottom:${26 * s}px;border-bottom:1px solid rgba(255,255,255,.09)">
+    <div class="lockup" style="position:static;font-size:${26 * s}px">${MARK(32 * s)}Halve</div>
+    <div class="mono" style="font-size:${13 * s}px;letter-spacing:.18em;color:var(--fg3)">${kicker}</div>
   </div>
   <div style="flex:1;display:flex;flex-direction:column;justify-content:center;position:relative;min-height:0">${body}</div>
-  <div class="mono" style="display:flex;justify-content:space-between;font-size:15px;color:var(--fg3);position:relative"><span>halve.finance · @Halvefinance</span><span>Live on Robinhood Chain</span></div>
+  <div class="mono" style="display:flex;justify-content:space-between;font-size:${12.5 * s}px;letter-spacing:.14em;color:var(--fg3);position:relative;padding-top:${24 * s}px;border-top:1px solid rgba(255,255,255,.09)"><span>HALVE.FINANCE · @HALVEFINANCE</span><span>ROBINHOOD CHAIN · 4663</span></div>
+  ${GRAIN}
 </div>`
 
-const step = (n, t, d, s) => `<div style="display:flex;gap:${22 * s}px;padding:${22 * s}px 0;border-top:1px solid var(--line)">
-  <div class="mono" style="color:var(--yt);font-size:${15 * s}px;padding-top:${6 * s}px;width:${34 * s}px;flex-shrink:0">${n}</div>
-  <div><div style="font-size:${26 * s}px;font-weight:500;letter-spacing:-.02em">${t}</div><div style="font-size:${19 * s}px;color:var(--fg2);margin-top:${6 * s}px;line-height:1.5">${d}</div></div>
+const trow = (k, v, s, opts = {}) => `<div class="row" style="padding:${15 * s}px 0;${opts.first ? 'border-top:0;padding-top:0;' : ''}${opts.last ? `padding-bottom:0;` : ''}"><small style="font-size:${12.5 * s}px">${k}</small><b style="font-size:${22 * s}px;${opts.gold ? 'color:var(--yt);' : ''}">${v}</b></div>`
+const ticket = (s) => `<div class="glass" style="padding:${24 * s}px ${28 * s}px ${22 * s}px;border-radius:${20 * s}px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${12 * s}px">
+    <div style="font-size:${17 * s}px;font-weight:500">Split</div>
+    <div class="mono" style="font-size:${12 * s}px;color:var(--fg3);display:flex;align-items:center;gap:${7 * s}px"><i style="width:${6 * s}px;height:${6 * s}px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);display:inline-block"></i>accountant synced</div>
+  </div>
+  ${trow('YOU DEPOSIT', `1.0000 <span style="color:var(--fg3);font-weight:400">share</span>`, s, { first: true })}
+  ${trow('YOU RECEIVE', `1.0000 <span style="color:var(--fg3);font-weight:400">PT</span>`, s)}
+  ${trow('&nbsp;', `1.0000 <span style="color:var(--fg3);font-weight:400">YT</span>`, s, { gold: true })}
+  ${trow('FEE · MERGE', `<span style="font-size:${13 * s}px;font-weight:400;color:var(--fg2)">0.10 % · free, any time</span>`, s, { last: true })}
+  <div style="position:absolute;left:0;right:0;bottom:-1px;height:1px;background:linear-gradient(90deg,transparent,rgba(232,193,112,.7),transparent)"></div>
 </div>`
 
-const way = (cls, k, t, d, s) => `<div class="chip ${cls}" style="padding:${30 * s}px ${34 * s}px;gap:${8 * s}px;align-items:flex-start;border-radius:${22 * s}px">
-  <small style="font-size:${14 * s}px">${k}</small>
-  <b style="font-size:${34 * s}px">${t}</b>
-  <div style="font-size:${19 * s}px;color:var(--fg2);line-height:1.5;margin-top:${4 * s}px">${d}</div>
+const step = (n, t, d, s, last = false) => `<div style="display:flex;gap:${24 * s}px;padding:${22 * s}px 0;${last ? '' : 'border-bottom:1px solid rgba(255,255,255,.08);'}">
+  <div class="mono" style="color:var(--yt);font-size:${14 * s}px;letter-spacing:.1em;padding-top:${7 * s}px;width:${34 * s}px;flex-shrink:0">${n}</div>
+  <div><div style="font-size:${26 * s}px;font-weight:500;letter-spacing:-.02em">${t}</div><div style="font-size:${18.5 * s}px;color:var(--fg2);margin-top:${6 * s}px;line-height:1.5">${d}</div></div>
 </div>`
 
-const handle = (label, s) => `<div class="btn btn-line mono" style="height:${54 * s}px;padding:0 ${22 * s}px;font-size:${18 * s}px;border-radius:${14 * s}px">${label}</div>`
+const way = (gold, k, t, d, s) => `<div class="glass${gold ? ' gold' : ''}" style="padding:${30 * s}px ${34 * s}px;border-radius:${22 * s}px">
+  <div style="display:flex;justify-content:space-between;align-items:center"><div class="mono" style="font-size:${12.5 * s}px;letter-spacing:.16em;color:${gold ? 'var(--yt)' : 'var(--fg3)'}">${k}</div><div class="mono" style="font-size:${40 * s}px;font-weight:500;letter-spacing:-.04em;color:${gold ? 'rgba(232,193,112,.22)' : 'rgba(255,255,255,.12)'};line-height:1">${gold ? 'YT' : 'PT'}</div></div>
+  <div style="font-size:${34 * s}px;font-weight:500;letter-spacing:-.03em;margin-top:${6 * s}px;${gold ? 'color:var(--yt);' : ''}">${t}</div>
+  <div style="font-size:${18.5 * s}px;color:var(--fg2);line-height:1.5;margin-top:${10 * s}px">${d}</div>
+</div>`
+
+const acct = (icon, k, v, s, last = false) => `<div style="display:flex;align-items:center;gap:${18 * s}px;padding:${18 * s}px 0;${last ? '' : 'border-bottom:1px solid rgba(255,255,255,.08);'}">
+  <div style="width:${40 * s}px;height:${40 * s}px;border-radius:${11 * s}px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);display:flex;align-items:center;justify-content:center;font-size:${17 * s}px;color:var(--fg)">${icon}</div>
+  <div class="mono" style="font-size:${12.5 * s}px;letter-spacing:.14em;color:var(--fg3);width:${110 * s}px">${k}</div>
+  <div class="mono" style="font-size:${20 * s}px;font-weight:500">${v}</div>
+</div>`
 
 function threadsBody(variant, s) {
-  const eyebrow = (txt, gold = false) => `<div class="eyebrow" style="font-size:${15 * s}px;padding:${8 * s}px ${15 * s}px;align-self:flex-start"><i${gold ? ' class="y"' : ''}></i>${txt}</div>`
-  const h1 = (txt, size) => `<h1 style="font-size:${size * s}px;margin:${26 * s}px 0 ${22 * s}px">${txt}</h1>`
-  const p = (txt) => `<p style="font-size:${24 * s}px;max-width:${820 * s}px">${txt}</p>`
+  const kicker = (txt) => `<div class="kicker" style="font-size:${13 * s}px">${txt}</div>`
+  const h1 = (txt, size) => `<h1 style="font-size:${size * s}px;margin:${22 * s}px 0 ${20 * s}px">${txt}</h1>`
+  const p = (txt) => `<p style="font-size:${23 * s}px;max-width:${820 * s}px;color:#9A9A9A">${txt}</p>`
   switch (variant) {
     case 'intro':
-      return `${eyebrow('Live on Robinhood Chain')}${h1('Lock in a fixed yield on your stock tokens. Or buy the dividends outright.', 74)}${p('Halve splits a tokenized stock or ETF into two things you can own separately: the share at a discount, and every dividend it pays until a fixed date.')}<div style="margin-top:${52 * s}px">${splitVisual(1.15 * s)}</div>`
+      return `${kicker('Fixed yield · Dividend tokens · Robinhood Chain')}${h1('Lock in a fixed yield on your stock tokens. Or buy the dividends outright.', 72)}${p('Halve splits a tokenized stock or ETF into two things you can own separately: the share at a discount, and every dividend it pays until a fixed date.')}<div style="margin-top:${44 * s}px">${ticket(s)}</div>`
     case 'how':
-      return `${eyebrow('How it works')}${h1('One share in.<br>Two tokens out.', 84)}<div style="margin-top:${18 * s}px;border-bottom:1px solid var(--line)">${step('01', 'Split', 'Deposit a stock token. You get a principal token (PT) and a yield token (YT), one each per share. Fee 0.10 %.', s)}${step('02', 'Hold or trade', 'PT is the share at a discount, YT is the dividend stream. Keep both, or sell the half you don’t want.', s)}${step('03', 'Merge or redeem', 'Merge PT + YT back into the share any time, free. Or wait for maturity: PT redeems the share, YT the dividends.', s)}</div>`
+      return `${kicker('How it works')}${h1('One share in.<br>Two tokens out.', 84)}<div class="glass" style="padding:${8 * s}px ${32 * s}px;border-radius:${22 * s}px;margin-top:${14 * s}px">${step('01', 'Split', 'Deposit a stock token. You get a principal token (PT) and a yield token (YT), one each per share. Fee 0.10 %.', s)}${step('02', 'Hold or trade', 'PT is the share at a discount, YT is the dividend stream. Keep both, or sell the half you don’t want.', s)}${step('03', 'Merge or redeem', 'Merge PT + YT back into the share any time, free. Or wait for maturity: PT redeems the share, YT the dividends.', s, true)}</div>`
     case 'ways':
-      return `${eyebrow('Two ways to use it')}${h1('Pick the half you want.', 84)}<div style="display:flex;flex-direction:column;gap:${18 * s}px;margin-top:${16 * s}px">${way('', 'principal · PT', 'The share at a discount.', 'Buy PT below one share, hold to maturity, redeem one full share. The discount is your fixed yield, known the day you buy.', s)}${way('y', 'yield · YT', 'Every dividend, nothing else.', 'A small ticket for the whole payout stream until maturity. If the payouts come in higher than the market expects, YT reprices first.', s)}</div>`
+      return `${kicker('Two ways to use it')}${h1('Pick the half you want.', 84)}<div style="display:flex;flex-direction:column;gap:${18 * s}px;margin-top:${12 * s}px">${way(false, 'PRINCIPAL TOKEN', 'The share at a discount.', 'Buy PT below one share, hold to maturity, redeem one full share. The discount is your fixed yield, known the day you buy.', s)}${way(true, 'YIELD TOKEN', 'Every dividend, nothing else.', 'A small ticket for the whole payout stream until maturity. If the payouts come in higher than the market expects, YT reprices first.', s)}</div>`
     case 'official':
-      return `${eyebrow('Official accounts', true)}${h1('Nothing is real until you read it here.', 84)}${p('Series launches, contract addresses and the $HALVE contract address are posted on our official accounts first. Anyone else sending you a contract address is not us.')}<div style="display:flex;flex-wrap:wrap;gap:${12 * s}px;margin-top:${40 * s}px">${handle('halve.finance', s)}${handle('X · @Halvefinance', s)}${handle('Threads · @Halvefinance', s)}</div>`
+      return `${kicker('Official accounts')}${h1('Nothing is real until you read it here.', 84)}${p('Series launches, contract addresses and the $HALVE contract address are posted on our official accounts first. Anyone else sending you a contract address is not us.')}<div class="glass" style="padding:${6 * s}px ${30 * s}px;border-radius:${22 * s}px;margin-top:${40 * s}px">${acct('↗', 'WEBSITE', 'halve.finance', s)}${acct(XGLYPH(16 * s), 'X', '@Halvefinance', s)}${acct('@', 'THREADS', '@Halvefinance', s)}${acct(`<i style="width:${8 * s}px;height:${8 * s}px;border-radius:50%;background:var(--yt);box-shadow:0 0 10px var(--yt);display:inline-block"></i>`, '$HALVE CA', `<span style="color:var(--yt)">not published yet</span>`, s, true)}</div>`
     default:
       throw new Error(variant)
   }
 }
 const threadsJob = (variant, n) => [
-  { name: `halve-threads-0${n}-${variant}-1080x1350.png`, html: card(1080, 1350, `0${n} / 04`, threadsBody(variant, 1)), w: 1080, h: 1350, scale: 1 },
-  { name: `halve-threads-0${n}-${variant}-1080x1080.png`, html: card(1080, 1080, `0${n} / 04`, threadsBody(variant, 0.84)), w: 1080, h: 1080, scale: 1 },
+  { name: `halve-threads-0${n}-${variant}-1080x1350.png`, html: card(1080, 1350, `0${n} / 04`, threadsBody(variant, 1), 1), w: 1080, h: 1350, scale: 1 },
+  { name: `halve-threads-0${n}-${variant}-1080x1080.png`, html: card(1080, 1080, `0${n} / 04`, threadsBody(variant, 0.82), 0.82), w: 1080, h: 1080, scale: 1 },
 ]
 
 
