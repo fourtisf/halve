@@ -69,6 +69,16 @@ p{color:var(--fg2);line-height:1.55}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;font-weight:500;border:1px solid transparent;border-radius:12px;white-space:nowrap}
 .btn-white{background:var(--fg);color:#000}.btn-line{border-color:var(--line2);color:var(--fg)}
 .foot{position:absolute;color:var(--fg3)}
+.dots{position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.09) 1px,transparent 1.3px);background-size:26px 26px;-webkit-mask-image:radial-gradient(closest-side at var(--mx,55%) var(--my,45%),#000 10%,transparent 100%);mask-image:radial-gradient(closest-side at var(--mx,55%) var(--my,45%),#000 10%,transparent 100%)}
+.sweep{position:absolute;inset:0;background:linear-gradient(112deg,transparent 40%,rgba(255,255,255,.045) 50%,transparent 60%)}
+.hair{position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.16) 30%,rgba(255,255,255,.16) 70%,transparent)}
+.vhair{position:absolute;top:0;bottom:0;width:1px;background:linear-gradient(180deg,transparent,rgba(255,255,255,.12),transparent)}
+.glass{position:relative;border:1px solid transparent;border-radius:18px;background:linear-gradient(#0B0B0B,#0B0B0B) padding-box,linear-gradient(135deg,rgba(232,193,112,.6),rgba(255,255,255,.10) 40%,rgba(255,255,255,.05)) border-box;box-shadow:0 40px 90px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.05)}
+.kicker{font-family:'Geist Mono',ui-monospace,monospace;font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--yt)}
+.row{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-top:1px solid rgba(255,255,255,.07)}
+.row small{font-family:'Geist Mono',ui-monospace,monospace;font-size:12px;color:var(--fg3);letter-spacing:.02em}
+.row b{font-family:'Geist Mono',ui-monospace,monospace;font-weight:500;font-size:20px;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.grain{position:absolute;inset:0;opacity:.07;mix-blend-mode:screen;pointer-events:none}
 </style>`
 
 /** 1 share → 1 PT + 1 YT, the product in one glance. */
@@ -183,9 +193,83 @@ const threadsJob = (variant, n) => [
   { name: `halve-threads-0${n}-${variant}-1080x1080.png`, html: card(1080, 1080, `0${n} / 04`, threadsBody(variant, 0.84)), w: 1080, h: 1080, scale: 1 },
 ]
 
+
+/** Film grain: an SVG turbulence layer at low opacity keeps big black areas from banding. */
+const GRAIN = `<svg class="grain" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><filter id="g"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><rect width="100%" height="100%" filter="url(#g)"/></svg>`
+const TOPBAR = `<div class="lockup" style="left:72px;top:52px;font-size:22px">${MARK(28)}Halve</div><div class="mono foot" style="right:72px;top:57px;font-size:12.5px;letter-spacing:.08em">HALVE.FINANCE · @HALVEFINANCE</div>`
+
+/** A. Monument: the mark at architectural scale, one line of type. */
+const headerA = `${BASE}
+<div class="frame" style="width:1500px;height:500px">
+  <div class="glow" style="right:-260px;top:-360px;width:1200px;height:1200px;background:radial-gradient(closest-side,rgba(232,193,112,.17),transparent 72%)"></div>
+  <div class="dots" style="--mx:72%;--my:50%"></div>
+  <div class="sweep"></div>
+  <div style="position:absolute;right:120px;top:50%;transform:translateY(-46%);filter:drop-shadow(0 0 70px rgba(232,193,112,.28))">${MARK(400)}</div>
+  <div class="vhair" style="right:600px;top:60px;bottom:60px"></div>
+  ${TOPBAR}
+  <div style="position:absolute;left:72px;top:148px;width:760px">
+    <div class="kicker">Fixed yield · Dividend tokens · Robinhood Chain</div>
+    <h1 style="font-size:68px;margin:20px 0 18px;letter-spacing:-.05em">Own the share.<br>Or own the dividends.</h1>
+    <p style="font-size:19px;max-width:560px;color:#8E8E8E">One stock token in, two tokens out.<br>Merge back any time, free.</p>
+  </div>
+  ${GRAIN}
+</div>`
+
+/** B. Glass: the split ticket as a floating panel, product-true, no yield numbers. */
+const headerB = `${BASE}
+<div class="frame" style="width:1500px;height:500px">
+  <div class="glow" style="left:-200px;top:-320px;width:1100px;height:1000px;background:radial-gradient(closest-side,rgba(232,193,112,.12),transparent 70%)"></div>
+  <div class="glow" style="right:-120px;bottom:-420px;width:900px;height:800px;background:radial-gradient(closest-side,rgba(232,193,112,.14),transparent 70%)"></div>
+  <div class="dots" style="--mx:78%;--my:55%"></div>
+  <div class="sweep"></div>
+  ${TOPBAR}
+  <div style="position:absolute;left:72px;top:158px;width:760px">
+    <div class="kicker">Live on Robinhood Chain</div>
+    <h1 style="font-size:60px;margin:20px 0 16px;white-space:nowrap">Fixed yield and dividend<br>tokens for tokenized stocks.</h1>
+    <p style="font-size:18px;max-width:600px;color:#8E8E8E">The share at a discount, and every dividend it pays until a fixed date. As two tokens.</p>
+  </div>
+  <div class="glass" style="position:absolute;right:92px;top:96px;width:470px;padding:22px 26px 18px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:15px;font-weight:500;letter-spacing:-.01em">Split</div>
+      <div class="mono" style="font-size:11.5px;color:var(--fg3);display:flex;align-items:center;gap:7px"><i style="width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);display:inline-block"></i>accountant synced</div>
+    </div>
+    <div class="row" style="border-top:0;padding-top:6px"><small>YOU DEPOSIT</small><b>1.0000 <span style="color:var(--fg3);font-weight:400">share</span></b></div>
+    <div class="row"><small>YOU RECEIVE</small><b>1.0000 <span style="color:var(--fg3);font-weight:400">PT</span></b></div>
+    <div class="row"><small>&nbsp;</small><b style="color:var(--yt)">1.0000 <span style="color:var(--fg3);font-weight:400">YT</span></b></div>
+    <div class="row" style="padding-bottom:4px"><small>FEE · MERGE</small><small style="color:var(--fg2)">0.10 % · free, any time</small></div>
+    <div style="position:absolute;left:0;right:0;bottom:-1px;height:1px;background:linear-gradient(90deg,transparent,rgba(232,193,112,.7),transparent)"></div>
+  </div>
+  ${GRAIN}
+</div>`
+
+/** C. Editorial: centred lockup, gold rule, hairlines. Reads like a masthead. */
+const headerC = `${BASE}
+<div class="frame" style="width:1500px;height:500px">
+  <div class="glow" style="left:50%;top:-380px;width:1300px;height:1000px;transform:translateX(-50%);background:radial-gradient(closest-side,rgba(232,193,112,.13),transparent 70%)"></div>
+  <div class="dots" style="--mx:50%;--my:40%"></div>
+  <div class="hair" style="top:64px"></div>
+  <div class="hair" style="bottom:64px"></div>
+  <div class="mono foot" style="left:72px;top:40px;font-size:12px;letter-spacing:.14em">ROBINHOOD CHAIN · 4663</div>
+  <div class="mono foot" style="right:72px;top:40px;font-size:12px;letter-spacing:.14em">HALVE.FINANCE</div>
+  <div style="position:absolute;left:0;right:0;top:118px;display:flex;flex-direction:column;align-items:center">
+    <div style="display:flex;align-items:center;gap:22px;font-size:76px;font-weight:600;letter-spacing:-.045em;line-height:1;filter:drop-shadow(0 0 50px rgba(232,193,112,.16))">${MARK(84)}Halve</div>
+    <div style="width:44px;height:2px;background:var(--yt);margin:30px 0 26px;box-shadow:0 0 18px rgba(232,193,112,.6)"></div>
+    <div style="font-size:24px;color:#B4B4B4;letter-spacing:-.015em">Fixed yield and dividend tokens for tokenized stocks.</div>
+    <div class="mono" style="font-size:12.5px;letter-spacing:.2em;color:var(--fg3);margin-top:26px">SPLIT &nbsp;·&nbsp; HOLD &nbsp;·&nbsp; MERGE</div>
+  </div>
+  <div class="mono foot" style="left:0;right:0;bottom:40px;text-align:center;font-size:12px;letter-spacing:.14em">@HALVEFINANCE</div>
+  ${GRAIN}
+</div>`
+
 const jobs = [
   { name: 'halve-x-header-premium-1500x500.png', html: header, w: 1500, h: 500, scale: 1 },
   { name: 'halve-x-header-premium-3000x1000.png', html: header, w: 1500, h: 500, scale: 2 },
+  { name: 'halve-x-header-a-monument-1500x500.png', html: headerA, w: 1500, h: 500, scale: 1 },
+  { name: 'halve-x-header-a-monument-3000x1000.png', html: headerA, w: 1500, h: 500, scale: 2 },
+  { name: 'halve-x-header-b-glass-1500x500.png', html: headerB, w: 1500, h: 500, scale: 1 },
+  { name: 'halve-x-header-b-glass-3000x1000.png', html: headerB, w: 1500, h: 500, scale: 2 },
+  { name: 'halve-x-header-c-editorial-1500x500.png', html: headerC, w: 1500, h: 500, scale: 1 },
+  { name: 'halve-x-header-c-editorial-3000x1000.png', html: headerC, w: 1500, h: 500, scale: 2 },
   { name: 'halve-x-post-follow-1600x900.png', html: follow, w: 1600, h: 900, scale: 1 },
   { name: 'halve-x-post-hero-1600x900.png', html: web, w: 1600, h: 900, scale: 1 },
   ...threadsJob('intro', 1),
