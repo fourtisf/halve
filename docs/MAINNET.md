@@ -94,7 +94,7 @@ becomes a Blockscout link. Any $HALVE/USDC pool is a separate decision; nothing 
 
 | Role | Can | Cannot |
 |---|---|---|
-| Vault owner | `setCap`, `setTreasury` | touch funds, pause, upgrade |
+| Vault owner | `setCap`, `setTreasury`, `setOwner` | touch funds, pause, upgrade |
 | Guardian | `resolvePending(kind)` after the 2-day timelock, split or special only | classify without timelock, move funds |
 | Anyone | `sync()`, `settle()` after maturity, `skim()` surplus to treasury | — |
 

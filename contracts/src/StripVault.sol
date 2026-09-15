@@ -35,7 +35,7 @@ contract StripVault {
     uint256 public immutable d0; // dividendIndex at series start
     uint256 public immutable s0; // splitFactor at series start
 
-    address public owner; // may only change cap and treasury — never touches user funds
+    address public owner; // may only change cap, treasury and itself — never touches user funds
     address public treasury;
     uint256 public cap; // max base units outstanding
     bool public settled;
@@ -49,6 +49,7 @@ contract StripVault {
     event RedeemYT(address indexed account, uint256 base, uint256 amount, uint256 fee);
     event CapChanged(uint256 cap);
     event TreasuryChanged(address treasury);
+    event OwnerChanged(address owner);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Vault: owner only");
@@ -181,6 +182,13 @@ contract StripVault {
         require(t != address(0), "Vault: zero");
         treasury = t;
         emit TreasuryChanged(t);
+    }
+
+    /// @notice Hand the (cap / treasury only) owner role to another address, e.g. a multisig after launch.
+    function setOwner(address o) external onlyOwner {
+        require(o != address(0), "Vault: zero");
+        owner = o;
+        emit OwnerChanged(o);
     }
 
     function _factor(uint256 D, uint256 S) internal view returns (uint256) {

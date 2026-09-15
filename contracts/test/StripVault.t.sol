@@ -89,6 +89,21 @@ contract StripVaultTest is Test {
         vault.setCap(1);
     }
 
+    function test_ownerCanHandOverButNeverToZero() public {
+        vm.prank(owner);
+        vm.expectRevert("Vault: zero");
+        vault.setOwner(address(0));
+        vm.prank(owner);
+        vault.setOwner(bob);
+        assertEq(vault.owner(), bob);
+        vm.prank(owner);
+        vm.expectRevert("Vault: owner only");
+        vault.setCap(1);
+        vm.prank(bob);
+        vault.setTreasury(alice);
+        assertEq(vault.treasury(), alice);
+    }
+
     function test_laterDepositorsGetFewerBaseUnitsAfterADividend() public {
         vm.prank(alice);
         vault.split(100e18);
