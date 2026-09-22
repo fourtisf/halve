@@ -11,11 +11,11 @@ import {
   trustWallet,
   walletConnectWallet,
 } from '@rainbow-me/rainbowkit/wallets'
-import { createConfig, http } from 'wagmi'
+import { createConfig } from 'wagmi'
 import { mock } from 'wagmi/connectors'
 import type { Address } from 'viem'
 import { HAS_WALLETCONNECT, MOCK, WALLETCONNECT_PROJECT_ID } from './env'
-import { RPC_HTTP, robinhood } from './chain'
+import { robinhood, rpcTransport } from './chain'
 
 export { CHAIN_ID, EXPLORER, explorerAddress, explorerTx, robinhood } from './chain'
 
@@ -46,7 +46,7 @@ const rainbowConnectors = connectorsForWallets([{ groupName: 'Wallets', wallets:
 
 export const wagmiConfig = createConfig({
   chains: [robinhood],
-  transports: { [robinhood.id]: http(RPC_HTTP, { batch: true }) },
+  transports: { [robinhood.id]: rpcTransport({ batch: true }) },
   connectors: [...rainbowConnectors, ...(MOCK ? [mock({ accounts: [DEMO_ADDRESS], features: { reconnect: true } })] : [])],
   ssr: true,
 })

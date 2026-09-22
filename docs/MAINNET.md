@@ -70,7 +70,7 @@ not enabled on the factory, or when the deployer holds less than `MIN_GAS_ETH` (
 
 What the command does, in order:
 
-1. **Preflight**: `STOCK` resolved from the ticker when empty, chain id 4663, deployer balance, `STOCK.uiMultiplier()`, `PRICE_FEED.latestRoundData()`, code at `NPM`, `MATURITY` in the future, enough stock for seeding.
+1. **Preflight**: `STOCK` resolved from the ticker when empty, chain id 4663, deployer balance, `STOCK.uiMultiplier()`, `PRICE_FEED.latestRoundData()`, code at `NPM`, `MATURITY` in the future, enough stock for seeding, and a simulated transfer of one raw unit of the stock to a contract (the position manager): a token that only moves between allowlisted wallets would deploy fine and then revert every split. The probe needs the deployer to hold at least one raw unit; `SKIP_TRANSFER_PROBE=1` disables it.
 2. **`DeploySeries.s.sol`**: `MultiplierAccountant` (or reuse `ACCOUNTANT`, synced first) and `StripVault` with its `pSPY` / `ySPY` tokens. The addresses go into `series.json` immediately, before the pools, so nothing is ever deployed and unrecorded.
 3. **`CreatePools.s.sol`**: PT/stock and YT/stock pools at `PT_PRICE` / `YT_PRICE`, fee tier `FEE`. With `SEED_AMOUNT`, `SeedPools` first splits that much stock (PT + YT), then seeds both pools full-range with stock as the quote.
 4. **`scripts/apply-deployment.mjs`** writes every address plus `maturity`, `cap`, `deployBlock` into `src/contracts/series.json`.
@@ -134,8 +134,11 @@ the deployer keystore off the serving host once the series is live. The scripts 
 against a remote RPC, because `cast send --private-key` exposes it to every process on the machine.
 
 It reads `.env.mainnet` (or `MAINNET_ENV`) for the signer, compares `uiMultiplier()` with the accountant's `lastMultiplier()`
-for every live series, and sends `sync()` when they differ. A held change shows up in the log and on
-`/oracle`; after two days the guardian (and only the guardian) resolves it, 1 for a split or 2 for a special dividend:
+for every live series, and sends `sync()` when they differ. Once a series has matured it also sends `settle()`
+(anyone may; redemption stays closed until somebody does), skipping it while the accountant holds a change
+until the guardian resolves it or the 30-day forced window plus the guardian's 2 days have passed. A held
+change shows up in the log and on `/oracle`; after two days the guardian (and only the guardian) resolves it,
+1 for a split or 2 for a special dividend:
 
 ```bash
 cast send <accountant> "resolvePending(uint8)" 2 --rpc-url $RPC_URL --account guardian --password-file /root/.guardian.pass

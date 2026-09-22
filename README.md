@@ -42,6 +42,7 @@ without a browser extension. The e2e suite uses it.
 | `MOCK` (or `NEXT_PUBLIC_MOCK`) | `true` | Render the prototype's mock numbers instead of reading chain 4663. Series whose addresses in `series.json` are still `0x000…` are mocked even when this is `false`. |
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | empty | WalletConnect Cloud project id. The WalletConnect option is hidden until set; MetaMask and Rabby work without it. |
 | `NEXT_PUBLIC_RPC_URL` | viem default (`https://rpc.mainnet.chain.robinhood.com`) | Override the Robinhood Chain RPC. |
+| `NEXT_PUBLIC_RPC_URLS` | empty | Comma-separated fallback RPCs, tried in order after `NEXT_PUBLIC_RPC_URL` when a request fails or is rate-limited (browser, sampler and `/api/health` alike). |
 | `NEXT_PUBLIC_BLOCK_TIME_MS` | `100` | Average block time; sizes the swap-log window of the chart fallback. |
 | `NEXT_PUBLIC_SITE_URL` | `https://halve.finance` | Canonical URL for metadata, OG image, robots and sitemap (Vercel previews use their own URL). |
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_*`) | empty | Optional Redis for the YT price and TVL series. Without it, samples are stored as JSON files under `HISTORY_DIR` (default `./data/history`), which is fine for a single VPS. |
@@ -99,7 +100,7 @@ which is exactly the share count it started with, and the YT redeems the shares 
 
 ```bash
 cd contracts
-forge build && forge test          # 26 tests incl. fuzz; FOUNDRY_SOLC=/path/to/solc if downloads are blocked
+forge build && forge test          # 41 tests incl. fuzz; FOUNDRY_SOLC=/path/to/solc if downloads are blocked
 pnpm abis                          # from the repo root: copies compiled ABIs into src/contracts/abis
 ```
 

@@ -122,8 +122,11 @@ wallet-modal attestation is the only gate.
 ## Incident checklist
 
 1. `curl -sS https://halve.finance/api/health | jq .` — is it the RPC (`rpc.ok=false`) or the app?
-2. RPC down: nothing to do on our side; the UI shows the retry banner and merges keep working through
-   any other RPC a user configures in their wallet.
+2. RPC down: with `NEXT_PUBLIC_RPC_URLS` set to one or more fallbacks (a dedicated provider's endpoint,
+   then the public one) the browser, the sampler and `/api/health` move to the next URL by themselves;
+   otherwise the UI shows the retry banner and merges keep working through any other RPC a user
+   configures in their wallet. `pnpm check:live` prints the block time and the widest `eth_getLogs`
+   range each RPC serves, which is what the activity list and order history depend on.
 3. App down: `pm2 restart halve`; if it will not start, `pm2 logs halve --err --lines 100`.
 4. Certificate errors: `systemctl restart caddy`; issuance is retried automatically.
 5. Wrong numbers on a live series: compare against Blockscout, then `pnpm check:live`.

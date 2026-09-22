@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server'
-import { createPublicClient, http } from 'viem'
+import { createPublicClient } from 'viem'
 import { SERIES, hasPlaceholderAddresses } from '@/contracts/types'
 import { MOCK } from '@/lib/env'
-import { CHAIN_ID, RPC_HTTP, robinhood } from '@/lib/chain'
+import { CHAIN_ID, RPC_HTTPS, robinhood, rpcTransport } from '@/lib/chain'
 import { historyBackend, lastSampleTs } from '@/lib/kv'
 import { peekMarket } from '@/lib/market-server'
 import pkg from '../../../../package.json'
 
 export const dynamic = 'force-dynamic'
 
-type Rpc = { ok: boolean; block?: number; chainId?: number; latencyMs?: number; error?: string }
+type Rpc = { ok: boolean; urls: number; block?: number; chainId?: number; latencyMs?: number; error?: string }
 const PROBE_TTL_MS = 10_000
 let probe: { at: number; rpc: Rpc } | null = null
 
@@ -19,12 +19,12 @@ async function probeRpc(): Promise<Rpc> {
   const t0 = Date.now()
   let rpc: Rpc
   try {
-    const client = createPublicClient({ chain: robinhood, transport: http(RPC_HTTP, { timeout: 5_000 }) })
+    const client = createPublicClient({ chain: robinhood, transport: rpcTransport({ timeout: 5_000 }) })
     const [block, chainId] = await Promise.all([client.getBlockNumber(), client.getChainId()])
-    rpc = { ok: chainId === CHAIN_ID, block: Number(block), chainId, latencyMs: Date.now() - t0 }
+    rpc = { ok: chainId === CHAIN_ID, urls: RPC_HTTPS.length, block: Number(block), chainId, latencyMs: Date.now() - t0 }
     if (!rpc.ok) rpc.error = `chain id ${chainId}, expected ${CHAIN_ID}`
   } catch (e) {
-    rpc = { ok: false, latencyMs: Date.now() - t0, error: e instanceof Error ? e.message.split('\n')[0].slice(0, 200) : 'rpc error' }
+    rpc = { ok: false, urls: RPC_HTTPS.length, latencyMs: Date.now() - t0, error: e instanceof Error ? e.message.split('\n')[0].slice(0, 200) : 'rpc error' }
   }
   probe = { at: Date.now(), rpc }
   return rpc

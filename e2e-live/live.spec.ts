@@ -193,7 +193,7 @@ test.describe.serial('live chain', () => {
     await expect(first(page, '#bal')).toHaveText('985.00') // 995 − 10 moved into the position
 
     // the deposit side survives without the local record: it is read back from the mint's IncreaseLiquidity event
-    await page.evaluate(() => localStorage.removeItem('halve:orders:v1'))
+    await page.evaluate(() => { for (const k of Object.keys(localStorage)) if (k.startsWith('halve:orders:')) localStorage.removeItem(k) }) // the key is suffixed with chain id + position manager
     await connect(page) // a fresh page: the fake wallet forgets its approval on reload, so connect again
     await page.click('#tBuy')
     await expect(page.locator('#orders .row').first()).toContainText(`Buy p${t} at ≤ 0.9`, { timeout: 30_000 })

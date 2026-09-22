@@ -7,13 +7,18 @@ const OPTIONAL_PEERS = ['@x402/core/client', '@x402/evm', '@x402/evm/exact/clien
 const EMPTY = './src/stubs/empty.cjs'
 
 // A plain-http RPC (a local anvil, see scripts/e2e-live.mjs) has to be allowed explicitly; production RPCs are https.
+// NEXT_PUBLIC_RPC_URLS (comma-separated fallbacks, see src/lib/env.ts) gets the same treatment.
 const rpcOrigin = (() => {
-  try {
-    const u = new URL(process.env.NEXT_PUBLIC_RPC_URL ?? '')
-    return u.protocol === 'http:' ? ` ${u.origin}` : ''
-  } catch {
-    return ''
+  const origins = new Set<string>()
+  for (const raw of [process.env.NEXT_PUBLIC_RPC_URL ?? '', ...(process.env.NEXT_PUBLIC_RPC_URLS ?? '').split(',')]) {
+    try {
+      const u = new URL(raw.trim())
+      if (u.protocol === 'http:') origins.add(u.origin)
+    } catch {
+      // not a URL
+    }
   }
+  return origins.size ? ` ${[...origins].join(' ')}` : ''
 })()
 
 // series.json can be swapped at build time (SERIES_FILE=path) — used for local anvil deployments and testnets.

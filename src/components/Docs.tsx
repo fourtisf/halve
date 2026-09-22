@@ -138,7 +138,7 @@ interface IStripVault {
       <h3 id="run">Run it yourself</h3>
       <pre>{`git clone <repo> && cd halve && pnpm install
 pnpm dev                   # mock mode, http://localhost:3000
-cd contracts && forge test # 26 contract tests
+cd contracts && forge test # 41 contract tests
 pnpm test:e2e:live         # anvil (chain 4663) → deploy → MOCK=false build → Playwright split/merge/dividend`}</pre>
       <p>The interface never needs this site to exist: with the addresses above and any wallet you can call <code>merge</code> or <code>redeemPT</code> on the explorer directly. See the <Link href="/legal/risk">Risk Disclosure</Link> and <Link href="/legal/terms">Terms of Use</Link>.</p>
     </Prose>
