@@ -16,11 +16,14 @@ test('oracle table lists every series with status and index', async ({ page }) =
   await expect(rows.nth(2)).toContainText('Held · timelock')
 })
 
-test('token page renders content from token.json', async ({ page }) => {
+test('token page: no contract yet, so no figures and staking / voting are planned', async ({ page }) => {
   await page.goto('/token')
-  await expect(page.locator('body')).toContainText('$43,960')
-  await expect(page.locator('body')).toContainText('12,418,300')
   await expect(page.locator('#ca')).toContainText('coming soon')
+  await expect(page.locator('.tok')).toContainText('1,000,000,000')
+  await expect(page.locator('.tok .rev b').first()).toHaveText('—') // revenue: nothing until a series is live
+  await expect(page.locator('.tok')).toContainText('Planned: stakers pay 5 bps')
+  await expect(page.locator('.tok')).toContainText('Planned: token holders choose')
+  await expect(page.locator('body')).not.toContainText('$43,960')
   await expect(page.locator('footer a', { hasText: 'X' })).toHaveAttribute('href', 'https://x.com/Halvefinance')
 })
 

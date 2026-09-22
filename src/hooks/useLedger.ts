@@ -5,6 +5,7 @@ import type { ContractFunctionParameters } from 'viem'
 import type { Series } from '@/contracts/types'
 import { multiplierAccountantAbi } from '@/contracts/abis'
 import { POLL_MS } from '@/contracts/constants'
+import { MOCK } from '@/lib/env'
 import { mockLedger } from '@/lib/mock'
 import { buildLedger, type Checkpoint, type PendingTuple } from '@/lib/ledger'
 import { ok, type ReadResult } from '@/lib/stats'
@@ -40,7 +41,8 @@ export function useLedger(series: Series): Ledger {
 
   return useMemo<Ledger>(() => {
     if (mock) {
-      if (quoted) return { rows: [], pending: null, events: 0, isLoading: false, isMock: true }
+      // a real price for this series, or a live build: there is no accountant yet, so the ledger is empty, not the demo's
+      if (quoted || !MOCK) return { rows: [], pending: null, events: 0, isLoading: false, isMock: true }
       const { rows, pending } = mockLedger(series.ticker)
       return { rows, pending, events: rows.filter((r) => !r.held).length, isLoading: false, isMock: true }
     }

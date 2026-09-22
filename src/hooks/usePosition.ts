@@ -6,6 +6,7 @@ import type { Series } from '@/contracts/types'
 import { erc20Abi } from '@/contracts/abis'
 import { POLL_MS } from '@/contracts/constants'
 import { CHAIN_ID } from '@/lib/wagmi'
+import { MOCK } from '@/lib/env'
 import { MOCK_BALANCE } from '@/lib/mock'
 import { useMockPositions } from '@/lib/mockStore'
 import { toNumber } from '@/lib/math'
@@ -44,7 +45,7 @@ export function usePosition(series: Series): PositionData {
   return useMemo<PositionData>(() => {
     if (mock) {
       const p = pos[series.ticker] ?? { pt: 0, yt: 0, lp: 0 }
-      const stock = connected ? MOCK_BALANCE : 0
+      const stock = connected && MOCK ? MOCK_BALANCE : 0 // the demo balance belongs to the demo, never to a live build
       return {
         isMock: true, connected, wrongChain, stock, pt: p.pt, yt: p.yt, lp: p.lp,
         stockRaw: 0n, ptRaw: 0n, ytRaw: 0n,

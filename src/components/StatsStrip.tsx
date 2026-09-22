@@ -2,6 +2,7 @@
 import { useMemo } from 'react'
 import { issuerCount, useSeries } from '@/hooks/useSeries'
 import { useAllSeriesStats } from '@/hooks/useSeriesStats'
+import { MOCK } from '@/lib/env'
 import { usd } from '@/lib/format'
 import { toNumber } from '@/lib/math'
 import { MOCK_DIVIDENDS_DISTRIBUTED } from '@/lib/mock'
@@ -18,7 +19,7 @@ export function StatsStrip() {
     const preview = !anyLive && stats.some((s) => s.isPreview)
     const distributed = anyLive
       ? stats.reduce((a, s) => a + (s.isMock ? 0 : toNumber(s.totalDeposits, s.decimals) * s.accrued * s.usdPrice), 0)
-      : preview ? 0 : MOCK_DIVIDENDS_DISTRIBUTED
+      : preview || !MOCK ? 0 : MOCK_DIVIDENDS_DISTRIBUTED
     return { tvl, distributed, preview }
   }, [stats])
   return (

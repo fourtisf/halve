@@ -5,7 +5,7 @@ import { getAbiItem, type PublicClient } from 'viem'
 import type { Series } from '@/contracts/types'
 import { uniswapV3PoolAbi } from '@/contracts/abis'
 import { CHART_DAYS, CHART_POINTS } from '@/contracts/constants'
-import { BLOCK_TIME_MS } from '@/lib/env'
+import { BLOCK_TIME_MS, MOCK } from '@/lib/env'
 import { MOCK_CHART_CHANGE, MOCK_TVL_CHANGE_7D, MOCK_YT_CHANGE_24H, mockChart } from '@/lib/mock'
 import { poolPrice } from '@/lib/math'
 import { resample, type Resampled, type Sample } from '@/lib/history'
@@ -91,6 +91,7 @@ export function useYtHistory(series: Series, seriesIndex: number): YtHistory {
       const p = q.closes30d
       return { points: p, days: CHART_DAYS, changePct: p[0] > 0 ? (p[p.length - 1] / p[0] - 1) * 100 : null, change24hPct: q.change24hPct, tvlChange7dPct: null, source: 'market', isMock: true }
     }
+    if (!MOCK) return { ...EMPTY, isMock: true } // a live build draws nothing for a series that is not deployed
     return { points: mockChart(seriesIndex), days: CHART_DAYS, changePct: MOCK_CHART_CHANGE, change24hPct: MOCK_YT_CHANGE_24H, tvlChange7dPct: MOCK_TVL_CHANGE_7D, source: 'mock', isMock: true }
   }
   return q.data ?? EMPTY

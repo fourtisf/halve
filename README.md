@@ -24,6 +24,7 @@ pnpm test:e2e    # playwright against `pnpm start` (run `pnpm build` first)
 pnpm check       # lint + typecheck + test + build
 pnpm contracts:test  # forge test (needs Foundry)
 pnpm test:e2e:live   # anvil chain 4663 → deploy mocks → MOCK=false build → real split / merge / dividend in the browser
+pnpm test:e2e:launch # MOCK=false build with series.json as committed: a live host invents nothing for undeployed series
 pnpm abis        # regenerate src/contracts/abis from contracts/out
 ```
 
@@ -34,6 +35,13 @@ the live anvil end-to-end run.
 In mock mode the wallet picker offers a **Demo wallet** (wagmi mock connector, address
 `0x7A3f…C32F`) so the connected state, Split / Merge / Earn and the Portfolio tab can be exercised
 without a browser extension. The e2e suite uses it.
+
+A live build (`MOCK=false`) shows nothing from the prototype: a series whose addresses are still
+`0x000…` gets the real share price and trailing yield from the market feed when available and
+skeletons otherwise, an empty ledger and chart, a closed action panel ("Opens at launch"), no demo
+wallet and no Earn tab (the LP router is demo-only until it exists); `/lend` shows "—" and a closed
+button until a Morpho market is configured, and `/token` shows "—" and "Planned" until
+`contractAddress` is set in `src/content/token.json`. `pnpm test:e2e:launch` proves it.
 
 ## Environment
 

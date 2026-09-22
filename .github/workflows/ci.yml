@@ -35,6 +35,9 @@ jobs:
       - run: pnpm test:e2e:preview
         env:
           CI: 'true'
+      - run: pnpm test:e2e:launch
+        env:
+          CI: 'true'
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

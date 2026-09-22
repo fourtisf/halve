@@ -4,6 +4,7 @@ import { useSwitchChain } from 'wagmi'
 import type { Series } from '@/contracts/types'
 import type { PositionData, SeriesStats } from '@/lib/types'
 import { EARN_TIERS, SPLIT_FEE } from '@/contracts/constants'
+import { MOCK } from '@/lib/env'
 import { f, monthYear } from '@/lib/format'
 import { earnApr } from '@/lib/mock'
 import { useMockPositions } from '@/lib/mockStore'
@@ -70,6 +71,8 @@ export function ActionPanel({ series, stats, position, mode, onMode, initialSide
   const matured = isMatured(series, stats)
   const settled = isSettled(stats) || (matured && stats.isMock)
   useEffect(() => { if (mode === 'redeem' && !matured) onMode('buy') }, [mode, matured, onMode])
+  /** A live build showing a series whose contracts are not deployed yet: nothing to sign, nothing to pretend. */
+  const notLive = !MOCK && position.isMock
 
   const a = cleanAmount(amt)?.num ?? 0 // the same parser the hooks use: "1e2" or "1,5" count as nothing, not as 100 or 1
   const n = a * (1 - SPLIT_FEE)
@@ -105,7 +108,9 @@ export function ActionPanel({ series, stats, position, mode, onMode, initialSide
   const quoting = trade && (limit ? limitH.ethQuoting : buyH.quoting)
   const badLimit = limit && (!range || !range.ok)
 
-  const label = !wallet
+  const label = notLive
+    ? 'Opens at launch'
+    : !wallet
     ? 'Connect wallet'
     : position.wrongChain
       ? 'Switch to Robinhood Chain'
@@ -131,9 +136,10 @@ export function ActionPanel({ series, stats, position, mode, onMode, initialSide
                           ? limit ? (range?.ok ? `Place limit ${dir}` : !range || range.reason === 'Enter a price' ? 'Enter a price' : 'Adjust the price') : `${selling ? 'Sell' : 'Buy'} ${buyToken}`
                           : `Provide ${a || 0} ${t}`)
 
-  const disabled = busy || !!invalid || splitClosed || noRoute || (trade && (quoting || badLimit || out <= 0))
+  const disabled = notLive || busy || !!invalid || splitClosed || noRoute || (trade && (quoting || badLimit || out <= 0))
 
   const go = async () => {
+    if (notLive) return
     if (!wallet) return open()
     if (position.wrongChain) return switchChain({ chainId: CHAIN_ID })
     if (mode === 'split') return splitH.split(amt)
@@ -151,7 +157,9 @@ export function ActionPanel({ series, stats, position, mode, onMode, initialSide
   }
 
   const sideNote =
-    trade
+    notLive
+      ? `p${t} and y${t} do not exist yet: this series has not been deployed. Trading, split and merge open the moment its contracts are live; addresses are announced on X first.`
+      : trade
       ? limit
         ? `Placed as a one-tick Uniswap v3 position: it fills when the pool price crosses your limit, at your limit or better, and earns the pool fee instead of paying it. Claim it once it fills; cancel any time and the deposit comes straight back.${dir === 'buy' && payWith === 'eth' ? ` Your ETH is swapped to ${t} now; the order waits in ${t}.` : ''}`
         : selling
@@ -181,7 +189,7 @@ export function ActionPanel({ series, stats, position, mode, onMode, initialSide
         <button className={mode === 'buy' ? 'on' : undefined} id="tBuy" onClick={() => onMode('buy')}>Trade</button>
         <button className={mode === 'split' ? 'on' : undefined} id="tSplit" onClick={() => onMode('split')}>Split</button>
         <button className={mode === 'merge' ? 'on' : undefined} id="tMerge" onClick={() => onMode('merge')}>Merge</button>
-        <button className={mode === 'earn' ? 'on' : undefined} id="tEarn" onClick={() => onMode('earn')}>Earn</button>
+        {MOCK && <button className={mode === 'earn' ? 'on' : undefined} id="tEarn" onClick={() => onMode('earn')}>Earn</button>}
         {matured && <button className={mode === 'redeem' ? 'on' : undefined} id="tRedeem" onClick={() => onMode('redeem')}>Redeem</button>}
       </div>
       {matured && mode !== 'redeem' && <Banner kind="y">Series matured · {settled ? 'redemption open' : 'awaiting settle()'}</Banner>}

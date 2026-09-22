@@ -86,6 +86,35 @@ export function mockStats(series: Series): SeriesStats {
   }
 }
 
+/**
+ * A live build (MOCK=false) showing a series that is not deployed yet, with no market quote for it either:
+ * nothing is known, so nothing is shown. `ready: false` renders skeletons where the demo would print numbers,
+ * `isPreview` keeps TVL / accrual at "—" and the stats strip in its "preview" wording.
+ */
+export function unpricedStats(series: Series): SeriesStats {
+  return {
+    ...mockStats(series),
+    isPreview: true,
+    ready: false,
+    ptPrice: 0,
+    ytPrice: 0,
+    fixedApy: 0,
+    leverage: 0,
+    divYield: 0,
+    totalDeposits: 0n,
+    capacityUsed: 0,
+    usdPrice: 0,
+    tvlUsd: 0,
+    dividendIndex: 1,
+    accrued: 0,
+    uiMultiplier: 1,
+    isSynced: true,
+    events: 0,
+    tvlChange7d: null,
+    ytChange24h: null,
+  }
+}
+
 const MONTH_TS = (monthIndex: number) => Date.UTC(2026, monthIndex, 1) / 1000 // Mar..Sep 2026
 
 export function mockLedger(ticker: string): { rows: LedgerRow[]; pending: LedgerRow | null } {
