@@ -24,6 +24,7 @@ pnpm test:e2e    # playwright against `pnpm start` (run `pnpm build` first)
 pnpm check       # lint + typecheck + test + build
 pnpm contracts:test  # forge test (needs Foundry)
 pnpm test:e2e:live   # anvil chain 4663 → deploy mocks → MOCK=false build → real split / merge / dividend in the browser
+pnpm test:e2e:launch # MOCK=false build with series.json as committed: a live host invents nothing for undeployed series
 pnpm abis        # regenerate src/contracts/abis from contracts/out
 ```
 
@@ -35,6 +36,13 @@ In mock mode the wallet picker offers a **Demo wallet** (wagmi mock connector, a
 `0x7A3f…C32F`) so the connected state, Split / Merge / Earn and the Portfolio tab can be exercised
 without a browser extension. The e2e suite uses it.
 
+A live build (`MOCK=false`) shows nothing from the prototype: a series whose addresses are still
+`0x000…` gets the real share price and trailing yield from the market feed when available and
+skeletons otherwise, an empty ledger and chart, a closed action panel ("Opens at launch"), no demo
+wallet and no Earn tab (the LP router is demo-only until it exists); `/lend` shows "—" and a closed
+button until a Morpho market is configured, and `/token` shows "—" and "Planned" until
+`contractAddress` is set in `src/content/token.json`. `pnpm test:e2e:launch` proves it.
+
 ## Environment
 
 | Variable | Default | Purpose |
@@ -42,6 +50,7 @@ without a browser extension. The e2e suite uses it.
 | `MOCK` (or `NEXT_PUBLIC_MOCK`) | `true` | Render the prototype's mock numbers instead of reading chain 4663. Series whose addresses in `series.json` are still `0x000…` are mocked even when this is `false`. |
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | empty | WalletConnect Cloud project id. The WalletConnect option is hidden until set; MetaMask and Rabby work without it. |
 | `NEXT_PUBLIC_RPC_URL` | viem default (`https://rpc.mainnet.chain.robinhood.com`) | Override the Robinhood Chain RPC. |
+| `NEXT_PUBLIC_RPC_URLS` | empty | Comma-separated fallback RPCs, tried in order after `NEXT_PUBLIC_RPC_URL` when a request fails or is rate-limited (browser, sampler and `/api/health` alike). |
 | `NEXT_PUBLIC_BLOCK_TIME_MS` | `100` | Average block time; sizes the swap-log window of the chart fallback. |
 | `NEXT_PUBLIC_SITE_URL` | `https://halve.finance` | Canonical URL for metadata, OG image, robots and sitemap (Vercel previews use their own URL). |
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_*`) | empty | Optional Redis for the YT price and TVL series. Without it, samples are stored as JSON files under `HISTORY_DIR` (default `./data/history`), which is fine for a single VPS. |
@@ -99,7 +108,7 @@ which is exactly the share count it started with, and the YT redeems the shares 
 
 ```bash
 cd contracts
-forge build && forge test          # 26 tests incl. fuzz; FOUNDRY_SOLC=/path/to/solc if downloads are blocked
+forge build && forge test          # 41 tests incl. fuzz; FOUNDRY_SOLC=/path/to/solc if downloads are blocked
 pnpm abis                          # from the repo root: copies compiled ABIs into src/contracts/abis
 ```
 

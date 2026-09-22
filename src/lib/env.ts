@@ -7,6 +7,15 @@ export const MOCK = (process.env.NEXT_PUBLIC_MOCK ?? 'true').toLowerCase() !== '
 
 export const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || undefined
 
+/**
+ * Every RPC the app may use, in priority order: NEXT_PUBLIC_RPC_URL first, then NEXT_PUBLIC_RPC_URLS
+ * (comma-separated). With more than one, reads move to the next URL when one is down or rate-limited
+ * (viem `fallback`). Empty when neither is set: the chain's default RPC is used.
+ */
+export const RPC_URLS: readonly string[] = [
+  ...new Set([RPC_URL ?? '', ...(process.env.NEXT_PUBLIC_RPC_URLS ?? '').split(',')].map((u) => u.trim()).filter((u) => u.length > 0)),
+]
+
 /** Empty when not configured: the WalletConnect option is then hidden. */
 export const WALLETCONNECT_PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || ''
 export const HAS_WALLETCONNECT = WALLETCONNECT_PROJECT_ID.length > 0

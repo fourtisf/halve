@@ -12,7 +12,7 @@ import { Position } from './Position'
 import { Portfolio } from './Portfolio'
 import { Activity } from './Activity'
 import { Banner, RPC_ERROR_TEXT } from './Skeleton'
-import { useSeriesAt } from '@/hooks/useSeries'
+import { DEFAULT_SERIES_INDEX, useSeriesAt } from '@/hooks/useSeries'
 import { useAllSeriesStats } from '@/hooks/useSeriesStats'
 import { useLedger } from '@/hooks/useLedger'
 import { usePosition } from '@/hooks/usePosition'
@@ -20,7 +20,7 @@ import { useYtHistory } from '@/hooks/useYtHistory'
 import { useMarket } from '@/hooks/useMarket'
 import { MOCK } from '@/lib/env'
 import { fmtInt, monthYear } from '@/lib/format'
-import { MOCK_START_BLOCK, mockStats } from '@/lib/mock'
+import { MOCK_START_BLOCK, mockStats, unpricedStats } from '@/lib/mock'
 import { CHAIN_ID } from '@/lib/wagmi'
 
 /** "block 4,812,337" — the chain's block number (live mode, or the preview), else the prototype's ticking counter. */
@@ -38,8 +38,8 @@ function BlockLabel() {
   return <span id="blk">{n != null ? `block ${fmtInt(n)}` : 'block —'}</span>
 }
 
-/** Buy is the default view; ?tab= picks the others. Portfolio keeps whatever the panel was showing. */
-const modeFor = (tab: string | null): Mode => (tab === 'earn' ? 'earn' : tab === 'split' ? 'split' : tab === 'merge' ? 'merge' : 'buy')
+/** Buy is the default view; ?tab= picks the others. Portfolio keeps whatever the panel was showing. Earn is demo-only. */
+const modeFor = (tab: string | null): Mode => (tab === 'earn' && MOCK ? 'earn' : tab === 'split' ? 'split' : tab === 'merge' ? 'merge' : 'buy')
 
 /** /app — mirrors the prototype's #p-app page and its ?s=&side=&tab= params. */
 export function AppPage() {
@@ -48,16 +48,16 @@ export function AppPage() {
   const sParam = params.get('s')
   const tab = params.get('tab')
   const side = params.get('side')
-  const { series, index } = useSeriesAt(sParam == null ? 1 : Number(sParam))
+  const { series, index } = useSeriesAt(sParam == null ? DEFAULT_SERIES_INDEX : Number(sParam))
   const [mode, setMode] = useState<Mode>(modeFor(tab))
   useEffect(() => { if (tab !== 'portfolio') setMode(modeFor(tab)) }, [tab])
 
   const all = useAllSeriesStats()
-  const stats = all.stats[index] ?? mockStats(series)
+  const stats = all.stats[index] ?? (MOCK ? mockStats(series) : unpricedStats(series))
   const ledger = useLedger(series)
   const position = usePosition(series)
   const history = useYtHistory(series, index)
-  const active = tab === 'earn' ? 'earn' : tab === 'portfolio' ? 'portfolio' : tab === 'split' || tab === 'merge' ? 'split' : 'buy'
+  const active = tab === 'earn' && MOCK ? 'earn' : tab === 'portfolio' ? 'portfolio' : tab === 'split' || tab === 'merge' ? 'split' : 'buy'
 
   const pick = (i: number) => {
     const q = new URLSearchParams(params.toString())
@@ -74,7 +74,13 @@ export function AppPage() {
             <h4><span id="aTtl" style={{ fontSize: 14, color: 'var(--fg)', fontFamily: 'var(--font-inter), Inter, system-ui, sans-serif' }}>{series.ticker} · {monthYear(series.maturity)}</span><BlockLabel /></h4>
             <SeriesSelector current={index} onPick={pick} />
             {all.isError && <Banner kind="r">{RPC_ERROR_TEXT}</Banner>}
-            {stats.isPreview && <Banner kind="y">Preview · real share price and trailing dividend yield. p{series.ticker} and y{series.ticker} prices are indicative until the pools open.</Banner>}
+            {stats.isPreview && (
+              <Banner kind="y">
+                {stats.ready
+                  ? <>Preview · real share price and trailing dividend yield. p{series.ticker} and y{series.ticker} prices are indicative until the pools open.</>
+                  : <>Preview · {series.ticker} is not deployed yet. Prices appear once the market feed answers; contract addresses are announced on X first.</>}
+              </Banner>
+            )}
             <KPIs stats={stats} ytChange24h={history.change24hPct} tvlChange7d={history.tvlChange7dPct} />
             <YtChart ticker={series.ticker} points={history.points} days={history.days} changePct={history.changePct} label={history.source === 'market' ? `${series.ticker} · ${history.days}d · share price` : undefined} />
           </div>

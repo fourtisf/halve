@@ -40,7 +40,7 @@ test.describe('home (mock mode)', () => {
     await expect(page.locator('#xcta')).toHaveAttribute('href', x)
     await expect(page.locator('#xfooter')).toHaveAttribute('href', x)
     await expect(page.locator('#xfooter')).toContainText('@Halvefinance')
-    await expect(page.locator('.hero .eyebrow')).toHaveText('Live on Robinhood Chain · Open source')
+    await expect(page.locator('.hero .eyebrow')).toHaveText('Launching on Robinhood Chain · Open source') // "Live" once a series is deployed
     await page.click('#announceClose')
     await expect(page.locator('#announce')).toHaveCount(0)
     await page.reload()

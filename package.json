@@ -18,6 +18,7 @@
     "abis": "node scripts/sync-abis.mjs",
     "contracts:test": "cd contracts && forge test",
     "test:e2e:live": "node scripts/e2e-live.mjs",
+    "test:e2e:launch": "node scripts/e2e-launch.mjs",
     "rehearse:mainnet": "node scripts/rehearse-mainnet.mjs",
     "deploy:mainnet": "node scripts/mainnet.mjs"
   },

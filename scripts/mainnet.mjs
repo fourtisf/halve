@@ -56,7 +56,8 @@ const out = (name) => resolve(outDir, `${TICKER}.${name}${dryRun ? '.dryrun' : '
 const placeholder = (a) => !a || /^0x0+$/i.test(a)
 const WAD = 10n ** 18n
 
-const stockAbi = parseAbi(['function uiMultiplier() view returns (uint256)', 'function symbol() view returns (string)', 'function decimals() view returns (uint8)', 'function balanceOf(address) view returns (uint256)'])
+const stockAbi = parseAbi(['function uiMultiplier() view returns (uint256)', 'function symbol() view returns (string)', 'function decimals() view returns (uint8)', 'function balanceOf(address) view returns (uint256)', 'function transfer(address to, uint256 amount) returns (bool)'])
+const MULTICALL3 = '0xca11bde05977b3631167028862be2a173976ca11'
 const feedAbi = parseAbi(['function latestRoundData() view returns (uint80, int256, uint256, uint256, uint80)', 'function decimals() view returns (uint8)'])
 const npmAbi = parseAbi(['function factory() view returns (address)'])
 const factoryAbi = parseAbi(['function feeAmountTickSpacing(uint24) view returns (int24)'])
@@ -182,6 +183,22 @@ try {
     if (env.SEED_AMOUNT && !resumePools) {
       const sb = await client.readContract({ address: STOCK, abi: stockAbi, functionName: 'balanceOf', args: [deployer] })
       if (sb >= 2n * BigInt(env.SEED_AMOUNT)) ok('deployer stock for seeding', sb.toString()); else bad('deployer stock', `needs 2 × SEED_AMOUNT = ${2n * BigInt(env.SEED_AMOUNT)}, has ${sb}`)
+    }
+    // The vault, the position manager and the pools are contracts. A stock token that only moves between
+    // allowlisted wallets would let the deploy succeed and then revert every split, so one raw unit is
+    // simulated (eth_call, nothing sent) to a contract before any gas is spent. SKIP_TRANSFER_PROBE=1 disables it.
+    if (env.SKIP_TRANSFER_PROBE !== '1') {
+      const probeTo = isAddress(NPM) ? NPM : MULTICALL3
+      const held = await client.readContract({ address: STOCK, abi: stockAbi, functionName: 'balanceOf', args: [deployer] }).catch(() => 0n)
+      if (held === 0n) note(`transfer probe skipped: ${deployer} holds no ${TICKER}. Send it one raw unit to prove the token accepts transfers to contracts before deploying.`)
+      else {
+        try {
+          await client.simulateContract({ address: STOCK, abi: stockAbi, functionName: 'transfer', args: [probeTo, 1n], account: deployer })
+          ok('stock accepts a transfer to a contract (simulated)', probeTo)
+        } catch (e) {
+          bad('stock transfer to a contract', `${e?.shortMessage ?? e?.message ?? e}. The vault and the pools are contracts too, so every split would revert; check the token's transfer rules (SKIP_TRANSFER_PROBE=1 overrides)`)
+        }
+      }
     }
   }
 } catch (e) { bad('RPC', e) }

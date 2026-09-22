@@ -5,6 +5,7 @@ import { zeroAddress, type ContractFunctionParameters } from 'viem'
 import { SERIES } from '@/contracts/types'
 import { erc20Abi } from '@/contracts/abis'
 import { POLL_MS } from '@/contracts/constants'
+import { MOCK } from '@/lib/env'
 import { MOCK_BALANCE } from '@/lib/mock'
 import { useMockPositions } from '@/lib/mockStore'
 import { toNumber } from '@/lib/math'
@@ -37,7 +38,7 @@ export function useAllPositions(): { rows: PortfolioRow[]; connected: boolean; i
     const rows = SERIES.map((s): PortfolioRow => {
       if (isMockSeries(s)) {
         const p = pos[s.ticker] ?? { pt: 0, yt: 0, lp: 0 }
-        return { id: s.id, ticker: s.ticker, stock: connected ? MOCK_BALANCE : 0, pt: p.pt, yt: p.yt, lp: p.lp, isMock: true }
+        return { id: s.id, ticker: s.ticker, stock: connected && MOCK ? MOCK_BALANCE : 0, pt: p.pt, yt: p.yt, lp: p.lp, isMock: true }
       }
       const b = li++ * 3
       return {

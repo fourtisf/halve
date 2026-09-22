@@ -8,7 +8,7 @@ export function WhyGrid() {
         <div className="cell"><h3>Dividends classified on-chain</h3><p>An oracle tells a dividend from a stock split by rule. Anything ambiguous waits two days in public, and merge stays open the whole time.</p></div>
         <div className="cell"><h3>One vault design, any stock token</h3><p>Every ERC-8056 token that exposes a multiplier gets its own vault and accountant. No series can affect another.</p></div>
         <div className="cell"><h3>Open, verified, tested</h3><p>Contracts open source under MIT and verified on Blockscout, with unit, fuzz and live-chain tests. Independent audit pending. No admin key over user funds.</p></div>
-        <div className="cell"><h3>Liquidity that deepens itself</h3><p>Protocol revenue is recycled into the PT and YT pools plus LP incentives, so spreads tighten as usage grows.</p></div>
+        <div className="cell"><h3>Liquidity that deepens itself</h3><p>Protocol revenue is earmarked for the PT and YT pools and for LP incentives, so spreads should tighten as usage grows.</p></div>
       </div>
     </div></section>
   )

@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /**
- * Keeper: calls accountant.sync() for every live series whose stock token multiplier moved. Wrong is impossible
- * (sync is rule-based); late costs precision, not safety: a dividend the keeper has not synced when a series
- * matures is still pulled in by settle() itself, and a held change only pauses splits. Run from cron every
- * 10 minutes with an explicit PATH (cron's own PATH has neither node nor cast) and a lock; the exact crontab
- * lines are in docs/MAINNET.md under "Keeper".
+ * Keeper: calls accountant.sync() for every live series whose stock token multiplier moved, and vault.settle()
+ * once a series has matured (anyone may; redemption cannot open until somebody does). Wrong is impossible
+ * (sync is rule-based, settle syncs first and refuses a held index); late costs precision, not safety: a
+ * dividend the keeper has not synced when a series matures is still pulled in by settle() itself, and a held
+ * change only pauses splits. Run from cron every 10 minutes with an explicit PATH (cron's own PATH has neither
+ * node nor cast) and a lock; the exact crontab lines are in docs/MAINNET.md under "Keeper".
  * Signing comes from .env.mainnet or MAINNET_ENV (WALLET_ARGS); any funded wallet can be the keeper, and a
  * separate low-value one is the right choice for a cron job on the serving host.
  */
@@ -30,9 +31,37 @@ const call = (to, sig) => cast(['call', to, sig, '--rpc-url', RPC]).split(' ')[0
 
 const live = JSON.parse(readFileSync(seriesFile, 'utf8')).filter((s) => !/^0x0+$/.test(s.accountant))
 const stamp = new Date().toISOString()
+const now = Math.floor(Date.now() / 1000)
+const FORCE_SETTLE_DELAY = 30 * 86_400 // StripVault.FORCE_SETTLE_DELAY
+const TIMELOCK = 2 * 86_400 // MultiplierAccountant.TIMELOCK
 let failures = 0
 const seen = new Set()
 for (const s of live) {
+  // 1. the vault: settle once matured. state() 0 active / 1 matured / 2 settled. A held accountant blocks settle()
+  //    until the guardian resolves it, or until 30 days + the guardian's 2-day window have passed (forced settle).
+  if (!/^0x0+$/.test(s.vault) && Number(s.maturity) > 0 && now >= Number(s.maturity)) {
+    try {
+      const state = call(s.vault, 'state()(uint8)')
+      if (state === '1') {
+        const synced = call(s.accountant, 'isSynced()(bool)') === 'true'
+        // Held: the vault refuses until the guardian resolves it or, from maturity + 30 days on, until the held
+        // change's own 2-day window has run out (pending().ts + TIMELOCK). The same gate as StripVault.settle().
+        let allowed = synced
+        if (!synced && now >= Number(s.maturity) + FORCE_SETTLE_DELAY) {
+          const heldAt = Number(cast(['call', s.accountant, 'pending()(bool,uint64,uint256,uint256)', '--rpc-url', RPC]).split('\n')[1].trim().split(' ')[0])
+          allowed = Number.isFinite(heldAt) && now >= heldAt + TIMELOCK
+        }
+        if (!allowed) { console.log(`${stamp} ${s.ticker}: MATURED, settle() waits for the guardian (accountant held)`); failures++ }
+        else if (!walletArgs) { console.log(`${stamp} ${s.ticker}: MATURED and unsettled, but no signer configured`); failures++ }
+        else {
+          const r = JSON.parse(cast(['send', s.vault, 'settle()', '--rpc-url', RPC, ...walletArgs, '--json']))
+          console.log(`${stamp} ${s.ticker}: settle() sent (tx ${r.transactionHash}, ${r.status === '0x1' ? 'ok' : 'REVERTED'}); state ${call(s.vault, 'state()(uint8)')}`)
+          if (r.status !== '0x1') failures++
+        }
+      }
+    } catch (e) { failures++; console.log(`${stamp} ${s.ticker}: settle error ${e.message}`) }
+  }
+  // 2. the accountant
   if (seen.has(s.accountant.toLowerCase())) continue // one accountant per stock token, shared across its series
   seen.add(s.accountant.toLowerCase())
   try {

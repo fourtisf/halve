@@ -3,8 +3,9 @@ import { useMemo } from 'react'
 import { useReadContracts } from 'wagmi'
 import { SERIES, type Series } from '@/contracts/types'
 import { POLL_MS } from '@/contracts/constants'
+import { MOCK } from '@/lib/env'
 import { previewStats } from '@/lib/market'
-import { mockStats } from '@/lib/mock'
+import { mockStats, unpricedStats } from '@/lib/mock'
 import type { SeriesStats } from '@/lib/types'
 import { parseStats, statsContracts, STATS_PER_SERIES, type ReadResult } from '@/lib/stats'
 import { useMarket } from './useMarket'
@@ -40,7 +41,8 @@ export function useAllSeriesStats(): AllStats {
       const q = quotes[s.ticker]
       if (isMockSeries(s)) {
         const m = mockStats(s)
-        return q ? previewStats(s, m, q, now) : m
+        if (q) return previewStats(s, m, q, now)
+        return MOCK ? m : unpricedStats(s) // a live build invents nothing for a series that is not deployed
       }
       return parseStats(s, data as readonly ReadResult[] | undefined, li++ * STATS_PER_SERIES, now, q?.price)
     })
@@ -51,5 +53,5 @@ export function useAllSeriesStats(): AllStats {
 export function useSeriesStats(series: Series): SeriesStats {
   const { stats } = useAllSeriesStats()
   const i = SERIES.findIndex((s) => s.id === series.id)
-  return stats[i] ?? mockStats(series)
+  return stats[i] ?? (MOCK ? mockStats(series) : unpricedStats(series))
 }

@@ -18,6 +18,7 @@ const UNISWAP = {
   npm: process.env.NEXT_PUBLIC_UNISWAP_NPM || '0x73991a25c818bf1f1128deaab1492d45638de0d3',
   weth: process.env.NEXT_PUBLIC_WETH || '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73',
 }
+const BLOCK_TIME_MS = Number(process.env.NEXT_PUBLIC_BLOCK_TIME_MS || 100) || 100
 const series = JSON.parse(readFileSync(new URL('../src/contracts/series.json', import.meta.url), 'utf8'))
 
 const abi = parseAbi([
@@ -75,6 +76,30 @@ try {
   for (const [k, a] of Object.entries(UNISWAP)) {
     const code = await client.getCode({ address: a }).catch(() => undefined)
     if (code && code !== '0x') ok(`uniswap ${k} has code`, a); else warn(`uniswap ${k}`, `no code at ${a}: market buys / sells and limit orders show "No route yet" (NEXT_PUBLIC_UNISWAP_* to override)`)
+  }
+  // block time sizes every log window the app scans (activity, orders' deposit side, chart fallback)
+  try {
+    const latest = await client.getBlock()
+    const back = latest.number > 1_000n ? 1_000n : latest.number
+    if (back > 0n) {
+      const older = await client.getBlock({ blockNumber: latest.number - back })
+      const ms = (Number(latest.timestamp - older.timestamp) * 1_000) / Number(back)
+      if (ms > 0 && (ms > BLOCK_TIME_MS * 2 || ms < BLOCK_TIME_MS / 2)) warn('block time', `≈ ${ms.toFixed(0)} ms over the last ${back} blocks, but NEXT_PUBLIC_BLOCK_TIME_MS is ${BLOCK_TIME_MS}: set it to ${Math.round(ms)} so the log windows cover the days they claim`)
+      else ok('block time', `≈ ${ms.toFixed(0)} ms over the last ${back} blocks (NEXT_PUBLIC_BLOCK_TIME_MS ${BLOCK_TIME_MS})`)
+    }
+  } catch (e) { warn('block time', e?.shortMessage ?? e?.message ?? e) }
+  // eth_getLogs range: wallet activity, the orders' deposit side and the chart fallback all scan wide ranges
+  {
+    const latest = await client.getBlockNumber()
+    const probe = series.find((s) => s.vault && s.vault !== zeroAddress)?.vault ?? UNISWAP.npm
+    let served = null
+    for (const span of [2_000_000n, 200_000n, 20_000n, 2_000n]) {
+      try { await client.getLogs({ address: probe, fromBlock: latest > span ? latest - span : 0n, toBlock: latest }); served = span; break } catch { /* range refused, try a narrower one */ }
+    }
+    const hours = (n) => ((Number(n) * BLOCK_TIME_MS) / 3_600_000).toFixed(1)
+    if (served === null) warn('eth_getLogs', 'every range down to 2,000 blocks was refused: the Portfolio activity list and order history will stay empty on this RPC (use one with a wider log range, or an indexer)')
+    else if (served < 2_000_000n) warn('eth_getLogs', `ranges above ${served.toLocaleString('en-US')} blocks (≈ ${hours(served)} h) are refused: activity older than that will not show on this RPC`)
+    else ok('eth_getLogs', `a ${served.toLocaleString('en-US')}-block range (≈ ${hours(served)} h) is served`)
   }
 } catch (e) { bad('RPC reachable', e); console.log('\nCannot reach the RPC; nothing else can be checked.'); process.exit(1) }
 

@@ -2,7 +2,7 @@
 import { useCallback, useState } from 'react'
 import { useAccount, usePublicClient, useWriteContract } from 'wagmi'
 import { useQueryClient } from '@tanstack/react-query'
-import type { Abi, Address, Hash, TransactionReceipt } from 'viem'
+import { BaseError, ContractFunctionRevertedError, type Abi, type Address, type Hash, type TransactionReceipt } from 'viem'
 import { erc20Abi } from '@/contracts/abis'
 import { CHAIN_ID } from '@/lib/wagmi'
 import { invalidateChainReads } from '@/lib/queries'
@@ -10,6 +10,9 @@ import { shortError, useToast } from '@/lib/toast'
 import type { TxStatus } from '@/lib/types'
 
 export type Step = { address: Address; abi: Abi; functionName: string; args: readonly unknown[]; label: 'approving' | 'sending'; value?: bigint }
+
+/** Sent gas limit = estimate + this much; unused gas is refunded. */
+export const GAS_MARGIN_PCT = 30n
 
 /**
  * Shared approve-then-call runner used by every transaction hook. `busy` covers the whole flow, from the
@@ -43,6 +46,50 @@ export function useTx() {
     [address, publicClient],
   )
 
+  /** "multicall reverted: Price slippage check" from a viem error, or null when it carries no revert. */
+  const describeRevert = (step: Step, e: unknown): string | null => {
+    const revert = e instanceof BaseError ? e.walk((x) => x instanceof ContractFunctionRevertedError) : null
+    const reason = revert instanceof ContractFunctionRevertedError ? (revert.reason ?? revert.data?.errorName ?? null) : null
+    return reason ? `${step.functionName} reverted: ${reason}` : null
+  }
+
+  /**
+   * Gas is estimated here and sent with the transaction instead of being left to the wallet or the node: a call
+   * that would revert then fails before anything is signed, with its reason, and refund-heavy calls (burning a
+   * position: decreaseLiquidity + collect + burn) get a margin. A node's bare estimate has been seen to come out
+   * a few hundred gas short of what such a call needs before its refunds, which makes the mined transaction
+   * revert with nothing to show for it. Unused gas is returned, so the margin costs nothing.
+   */
+  const gasFor = useCallback(
+    async (step: Step): Promise<bigint> => {
+      if (!publicClient || !address) throw new Error('Connect wallet')
+      try {
+        const estimate = await publicClient.estimateContractGas({ address: step.address, abi: step.abi, functionName: step.functionName, args: step.args as readonly unknown[] | undefined, account: address, value: step.value })
+        return (estimate * (100n + GAS_MARGIN_PCT)) / 100n
+      } catch (e) {
+        throw new Error(describeRevert(step, e) ?? (e instanceof BaseError ? e.shortMessage : String(e)))
+      }
+    },
+    [publicClient, address],
+  )
+
+  /**
+   * A mined-but-reverted transaction carries no reason in its receipt. Replaying the same call at that block
+   * reproduces the revert, so the toast can say "Price slippage check" instead of just "multicall reverted".
+   */
+  const revertReason = useCallback(
+    async (step: Step, blockNumber: bigint): Promise<string | null> => {
+      if (!publicClient || !address) return null
+      try {
+        await publicClient.simulateContract({ address: step.address, abi: step.abi, functionName: step.functionName, args: step.args as readonly unknown[] | undefined, account: address, value: step.value, blockNumber })
+        return null
+      } catch (e) {
+        return describeRevert(step, e) ?? (e instanceof BaseError ? `${step.functionName} reverted: ${e.shortMessage}` : null)
+      }
+    },
+    [publicClient, address],
+  )
+
   const run = useCallback(
     async (steps: (Step | null)[], onDone: string): Promise<TransactionReceipt | null> => {
       if (!address || !publicClient) { setPreparing(false); toast('Connect wallet'); return null }
@@ -52,13 +99,14 @@ export function useTx() {
         for (const step of steps) {
           if (!step) continue
           setStatus(step.label)
-          const hash = await writeContractAsync({ address: step.address, abi: step.abi, functionName: step.functionName, args: step.args, chainId: CHAIN_ID, value: step.value, account: address })
+          const gas = await gasFor(step)
+          const hash = await writeContractAsync({ address: step.address, abi: step.abi, functionName: step.functionName, args: step.args, chainId: CHAIN_ID, value: step.value, account: address, gas })
           setTxHash(hash)
           setStatus('confirming')
           let replaced: string | null = null
           const rc = await publicClient.waitForTransactionReceipt({ hash, onReplaced: (r) => { replaced = r.reason } })
           if (replaced === 'cancelled') throw new Error(`${step.functionName} was cancelled in the wallet`)
-          if (rc.status !== 'success') throw new Error(`${step.functionName} reverted`)
+          if (rc.status !== 'success') throw new Error((await revertReason(step, rc.blockNumber)) ?? `${step.functionName} reverted`)
           last = rc
         }
         setStatus('done')
@@ -74,7 +122,7 @@ export function useTx() {
         setPreparing(false)
       }
     },
-    [address, publicClient, writeContractAsync, qc, toast],
+    [address, publicClient, writeContractAsync, qc, toast, gasFor, revertReason],
   )
 
   /** Keep the flow busy across several run() calls (a swap followed by a mint). */

@@ -7,6 +7,7 @@ import type { Series } from '@/contracts/types'
 import { uniswapV3PoolAbi } from '@/contracts/abis'
 import { POLL_MS } from '@/contracts/constants'
 import { CHAIN_ID, UNISWAP } from '@/lib/chain'
+import { MOCK } from '@/lib/env'
 import { applySlippage, bestQuote, candidateRoutes, encodePath, quoterV2Abi, swapDeadline, swapRouter02Abi, type Direction, type Quote, type Route } from '@/lib/buy'
 import { ADDRESS_THIS } from '@/lib/limit'
 import { toNumber } from '@/lib/math'
@@ -136,7 +137,7 @@ export function useBuy(series: Series, stats: SeriesStats, side: BuySide, payWit
     routeLabel: label,
     quoting: !mock && q.isLoading && amountIn > 0n,
     noRoute,
-    ethBalance: mock ? MOCK_ETH_BALANCE : eth.data ? Number(eth.data.formatted) : 0,
+    ethBalance: mock ? (MOCK ? MOCK_ETH_BALANCE : 0) : eth.data ? Number(eth.data.formatted) : 0, // the demo's 0.42 ETH belongs to the demo only
     ethUsd,
     buy: trade,
     status: tx.status,

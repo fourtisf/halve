@@ -52,6 +52,9 @@ next-env.d.ts
 /.next-live/
 /.e2e-live/
 
+# launch-day build (scripts/e2e-launch.mjs)
+/.next-launch/
+
 # mainnet deployment secrets (scripts/mainnet.mjs)
 .env.mainnet
 !.env.mainnet.example
