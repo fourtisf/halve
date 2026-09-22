@@ -77,7 +77,7 @@ const DEADLINE = () => BigInt(Math.floor(Date.now() / 1000) + 60 * 60) // an app
  * window that finally works stays unknown, which the UI shows as a plain position with a Close button.
  */
 async function depositSides(client: PublicClient, ids: bigint[], fromBlock: bigint | 'earliest'): Promise<Record<string, boolean>> {
-  const latest = await client.getBlockNumber()
+  const latest = await client.getBlockNumber({ cacheTime: 0 }) // a head cached from before the mint would miss its event
   const spans: (bigint | null)[] = [null, 2_000_000n, 200_000n, 20_000n, 2_000n]
   for (const span of spans) {
     const from = span == null ? fromBlock : latest > span ? latest - span : 0n

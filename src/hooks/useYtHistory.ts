@@ -29,7 +29,7 @@ async function fromKv(s: Series): Promise<YtHistory | null> {
 
 /** 2. Fallback: build the line from the YT pool's Swap events (shrinks the window if the RPC rejects the range). */
 async function fromLogs(client: PublicClient, s: Series): Promise<YtHistory> {
-  const latest = await client.getBlockNumber()
+  const latest = await client.getBlockNumber({ cacheTime: 0 }) // never a head cached from before the latest swap
   const [token0, slot0] = await Promise.all([
     client.readContract({ address: s.poolYT, abi: uniswapV3PoolAbi, functionName: 'token0' }),
     client.readContract({ address: s.poolYT, abi: uniswapV3PoolAbi, functionName: 'slot0' }),

@@ -27,7 +27,9 @@ async function fromLogs(client: PublicClient, account: Address): Promise<Activit
   const live = SERIES.filter((s) => !isMockSeries(s))
   if (live.length === 0) return []
   const byVault = new Map(live.map((s) => [s.vault.toLowerCase(), s]))
-  const latest = await client.getBlockNumber()
+  // viem caches the block number for up to `cacheTime` (4 s): a head read right after a transaction's receipt
+  // could still predate its block and drop the newest event from the scan
+  const latest = await client.getBlockNumber({ cacheTime: 0 })
   const blocksPerDay = BigInt(Math.max(1, Math.round(86_400_000 / BLOCK_TIME_MS)))
   const floor = live.reduce((m, s) => (s.deployBlock != null ? (m == null ? BigInt(s.deployBlock) : m < BigInt(s.deployBlock) ? m : BigInt(s.deployBlock)) : m), null as bigint | null)
   const spans = [90, 30, 7, 1].map((d) => blocksPerDay * BigInt(d))

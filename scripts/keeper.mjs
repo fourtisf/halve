@@ -44,8 +44,14 @@ for (const s of live) {
       const state = call(s.vault, 'state()(uint8)')
       if (state === '1') {
         const synced = call(s.accountant, 'isSynced()(bool)') === 'true'
-        const forced = now >= Number(s.maturity) + FORCE_SETTLE_DELAY + TIMELOCK
-        if (!synced && !forced) { console.log(`${stamp} ${s.ticker}: MATURED, settle() waits for the guardian (accountant held)`); failures++ }
+        // Held: the vault refuses until the guardian resolves it or, from maturity + 30 days on, until the held
+        // change's own 2-day window has run out (pending().ts + TIMELOCK). The same gate as StripVault.settle().
+        let allowed = synced
+        if (!synced && now >= Number(s.maturity) + FORCE_SETTLE_DELAY) {
+          const heldAt = Number(cast(['call', s.accountant, 'pending()(bool,uint64,uint256,uint256)', '--rpc-url', RPC]).split('\n')[1].trim().split(' ')[0])
+          allowed = Number.isFinite(heldAt) && now >= heldAt + TIMELOCK
+        }
+        if (!allowed) { console.log(`${stamp} ${s.ticker}: MATURED, settle() waits for the guardian (accountant held)`); failures++ }
         else if (!walletArgs) { console.log(`${stamp} ${s.ticker}: MATURED and unsettled, but no signer configured`); failures++ }
         else {
           const r = JSON.parse(cast(['send', s.vault, 'settle()', '--rpc-url', RPC, ...walletArgs, '--json']))
